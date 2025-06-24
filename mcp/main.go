@@ -38,9 +38,17 @@ type WindowInfo struct {
 }
 
 type Command struct {
-	ID   string          `json:"id"`
-	Tool string          `json:"tool"`
-	Args json.RawMessage `json:"args"`
+	ID           string          `json:"id"`
+	Tool         string          `json:"tool"`
+	Args         json.RawMessage `json:"args"`
+	ExpectsReply bool            `json:"expectsReply,omitempty"`
+}
+
+type CommandResponse struct {
+	ID      string          `json:"id"`
+	Success bool            `json:"success"`
+	Data    json.RawMessage `json:"data,omitempty"`
+	Error   string          `json:"error,omitempty"`
 }
 
 func main() {
@@ -140,17 +148,25 @@ func handleOpenFileLogic(args OpenFileArgs) (*mcp.CallToolResult, error) {
 
 	// Create command
 	cmd := Command{
-		ID:   fmt.Sprintf("%d", time.Now().UnixNano()),
-		Tool: "openFile",
+		ID:           fmt.Sprintf("%d", time.Now().UnixNano()),
+		Tool:         "openFile",
+		ExpectsReply: true,
 	}
 
 	// Marshal args to preserve original structure
 	argsJson, _ := json.Marshal(args)
 	cmd.Args = argsJson
 
-	// Write command to window's command file
-	if err := writeCommand(windowId, cmd); err != nil {
-		return nil, err
+	// Write command and wait for response
+	log.Printf("[COMMAND SENT] %s: %+v", cmd.Tool, string(argsJson))
+	resp, err := writeCommandAndWaitForResponse(windowId, cmd, 5*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute command: %v", err)
+	}
+
+	// Check if command succeeded
+	if !resp.Success {
+		return nil, fmt.Errorf("command failed: %s", resp.Error)
 	}
 
 	// Return success message
@@ -200,17 +216,25 @@ func handleOpenDiffLogic(args OpenDiffArgs) (*mcp.CallToolResult, error) {
 
 	// Create command
 	cmd := Command{
-		ID:   fmt.Sprintf("%d", time.Now().UnixNano()),
-		Tool: "openDiff",
+		ID:           fmt.Sprintf("%d", time.Now().UnixNano()),
+		Tool:         "openDiff",
+		ExpectsReply: true,
 	}
 
 	// Marshal args to preserve original structure
 	argsJson, _ := json.Marshal(args)
 	cmd.Args = argsJson
 
-	// Write command to window's command file
-	if err := writeCommand(windowId, cmd); err != nil {
-		return nil, err
+	// Write command and wait for response
+	log.Printf("[COMMAND SENT] %s: %+v", cmd.Tool, string(argsJson))
+	resp, err := writeCommandAndWaitForResponse(windowId, cmd, 5*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute command: %v", err)
+	}
+
+	// Check if command succeeded
+	if !resp.Success {
+		return nil, fmt.Errorf("command failed: %s", resp.Error)
 	}
 
 	// Return success message
@@ -276,8 +300,8 @@ func getActiveWindows() (map[string]*WindowInfo, error) {
 	now := time.Now()
 
 	for _, file := range files {
-		if strings.HasSuffix(file.Name(), ".json") && !strings.Contains(file.Name(), ".cmd.") {
-			windowId := strings.TrimSuffix(file.Name(), ".json")
+		if strings.HasSuffix(file.Name(), ".meta.json") {
+			windowId := strings.TrimSuffix(file.Name(), ".meta.json")
 			filePath := filepath.Join(vsClaudeDir, file.Name())
 
 			// Check file modification time
@@ -290,8 +314,10 @@ func getActiveWindows() (map[string]*WindowInfo, error) {
 			if now.Sub(fileInfo.ModTime()) > staleThreshold {
 				// Clean up stale window files
 				os.Remove(filePath)
-				cmdFile := filepath.Join(vsClaudeDir, windowId+".cmd.jsonl")
+				cmdFile := filepath.Join(vsClaudeDir, windowId+".in")
 				os.Remove(cmdFile)
+				respFile := filepath.Join(vsClaudeDir, windowId+".out")
+				os.Remove(respFile)
 				log.Printf("Cleaned up stale window: %s", windowId)
 				continue
 			}
@@ -314,19 +340,124 @@ func getActiveWindows() (map[string]*WindowInfo, error) {
 	return windows, nil
 }
 
-func writeCommand(windowId string, cmd Command) error {
-	cmdFile := filepath.Join(vsClaudeDir, fmt.Sprintf("%s.cmd.jsonl", windowId))
+// writeCommandAndWaitForResponse writes a command and waits for a response if expectsReply is true.
+// Recommended timeout values:
+//   - 5s for quick operations (file open, navigation)
+//   - 30s for operations that might require user interaction
+//   - 60s for operations that might involve heavy computation
+func writeCommandAndWaitForResponse(windowId string, cmd Command, timeout time.Duration) (*CommandResponse, error) {
+	// Write the command
+	cmdFile := filepath.Join(vsClaudeDir, fmt.Sprintf("%s.in", windowId))
 
 	f, err := os.OpenFile(cmdFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return fmt.Errorf("failed to open command file: %v", err)
+		return nil, fmt.Errorf("failed to open command file: %v", err)
 	}
 	defer f.Close()
 
 	cmdBytes, _ := json.Marshal(cmd)
 	if _, err := fmt.Fprintf(f, "%s\n", cmdBytes); err != nil {
-		return fmt.Errorf("failed to write command: %v", err)
+		return nil, fmt.Errorf("failed to write command: %v", err)
 	}
 
-	return nil
+	// Flush to ensure the command is written immediately
+	if err := f.Sync(); err != nil {
+		return nil, fmt.Errorf("failed to flush command: %v", err)
+	}
+
+	// If no response expected, return immediately
+	if !cmd.ExpectsReply {
+		return nil, nil
+	}
+
+	// Watch for response
+	respFile := filepath.Join(vsClaudeDir, fmt.Sprintf("%s.out", windowId))
+
+	// Set up timeout
+	deadline := time.Now().Add(timeout)
+
+	// Track last read position
+	var lastPosition int64 = 0
+
+	// Poll for response every 50ms until timeout
+	// Default timeout should be set by caller (e.g., 5 seconds)
+	for time.Now().Before(deadline) {
+		// Open file to check size and read from last position
+		file, err := os.Open(respFile)
+		if err != nil {
+			if os.IsNotExist(err) {
+				// Response file doesn't exist, extension might not be running
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
+			return nil, fmt.Errorf("failed to open response file: %v", err)
+		}
+
+		// Get file info to check if there's new data
+		fileInfo, err := file.Stat()
+		if err != nil {
+			file.Close()
+			return nil, fmt.Errorf("failed to stat response file: %v", err)
+		}
+
+		// If file has grown, read new data
+		if fileInfo.Size() > lastPosition {
+			// Seek to last read position
+			if _, err := file.Seek(lastPosition, 0); err != nil {
+				file.Close()
+				return nil, fmt.Errorf("failed to seek in response file: %v", err)
+			}
+
+			// Read new data
+			newData := make([]byte, fileInfo.Size()-lastPosition)
+			n, err := file.Read(newData)
+			if err != nil {
+				file.Close()
+				return nil, fmt.Errorf("failed to read response file: %v", err)
+			}
+
+			// Update last position
+			lastPosition += int64(n)
+
+			// Parse new lines looking for our response
+			// Handle partial line at the end
+			dataStr := string(newData)
+			lines := strings.Split(dataStr, "\n")
+
+			// Check if last line is complete (ends with newline)
+			if len(lines) > 0 && !strings.HasSuffix(dataStr, "\n") {
+				// Last line is incomplete, adjust position to re-read it next time
+				lastLine := lines[len(lines)-1]
+				lastPosition -= int64(len(lastLine))
+				lines = lines[:len(lines)-1]
+			}
+
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if line == "" {
+					continue
+				}
+
+				var resp CommandResponse
+				if err := json.Unmarshal([]byte(line), &resp); err != nil {
+					log.Printf("Failed to parse response line: %v", err)
+					continue
+				}
+
+				// Check if this is our response
+				if resp.ID == cmd.ID {
+					file.Close()
+					log.Printf("[RESPONSE RECEIVED] ID: %s, Success: %v", resp.ID, resp.Success)
+					return &resp, nil
+				}
+			}
+		}
+
+		file.Close()
+
+		// Wait a bit before next check
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	return nil, fmt.Errorf("timeout waiting for response to command %s", cmd.ID)
 }

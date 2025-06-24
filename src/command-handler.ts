@@ -21,29 +21,42 @@ export interface Command {
     id: string;
     tool: string;
     args: CommandArgs;
+    expectsReply?: boolean;
+}
+
+export interface CommandResponse {
+    id: string;
+    success: boolean;
+    data?: unknown;
+    error?: string;
 }
 
 export class CommandHandler {
     constructor(private outputChannel: vscode.OutputChannel) {}
 
-    async executeCommand(command: Command): Promise<void> {
+    async executeCommand(command: Command): Promise<{ success: boolean; data?: unknown; error?: string }> {
         this.outputChannel.appendLine(`Executing command: ${command.tool}`);
 
         try {
             switch (command.tool) {
                 case 'openFile':
                     await this.handleOpenFile(command.args as OpenFileArgs);
-                    break;
+                    return { success: true };
 
                 case 'openDiff':
                     await this.handleOpenDiff(command.args as OpenDiffArgs);
-                    break;
+                    return { success: true };
 
-                default:
-                    this.outputChannel.appendLine(`Unknown command: ${command.tool}`);
+                default: {
+                    const error = `Unknown command: ${command.tool}`;
+                    this.outputChannel.appendLine(error);
+                    return { success: false, error };
+                }
             }
         } catch (error) {
-            this.outputChannel.appendLine(`Command execution error: ${error}`);
+            const errorMessage = `Command execution error: ${error}`;
+            this.outputChannel.appendLine(errorMessage);
+            return { success: false, error: String(error) };
         }
     }
 
