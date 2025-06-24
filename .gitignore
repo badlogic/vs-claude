@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+*.log
+
+# Build outputs
+out/
+bin/
+*.vsix
+
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.vscode-test/
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+go.work
+go.work.sum
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# Test artifacts
+coverage/
+*.coverage
+
+# Environment
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# VS Claude runtime files
+.vs-claude/

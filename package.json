@@ -1,0 +1,68 @@
+{
+  "name": "vs-claude",
+  "displayName": "VS Claude",
+  "description": "MCP server for Claude to control VS Code",
+  "version": "0.0.1",
+  "publisher": "vs-claude",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "files": [
+    "out/**/*.js",
+    "bin/**/*"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "vs-claude.showSetup",
+        "title": "VS Claude: Install MCP"
+      },
+      {
+        "command": "vs-claude.uninstall",
+        "title": "VS Claude: Uninstall MCP"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "npm run lint && npm run format:check && tsc -p ./ && npm run build:go",
+    "build:go": "./scripts/build-binaries.sh",
+    "build:debug": "tsc -p ./ && npm run build:go:current",
+    "build:go:current": "cd mcp && go build -o ../bin/mcp-server-$(go env GOOS)-$(go env GOARCH)$(go env GOEXE) .",
+    "watch": "tsc -watch -p ./",
+    "lint": "biome lint ./src",
+    "lint:fix": "biome lint --write ./src",
+    "format": "biome format --write ./src && npm run format:go",
+    "format:check": "biome format ./src",
+    "format:go": "cd mcp && go fmt ./...",
+    "check": "biome check ./src",
+    "check:fix": "biome check --write ./src",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf out/ bin/",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.5",
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.74.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.2",
+    "typescript": "^5.0.0"
+  },
+  "lint-staged": {
+    "src/**/*.{ts,js}": [
+      "biome check --write",
+      "biome format --write"
+    ],
+    "mcp/**/*.go": [
+      "gofmt -w"
+    ]
+  }
+}
