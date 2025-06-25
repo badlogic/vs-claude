@@ -16,20 +16,7 @@ import (
 
 var vsClaudeDir = filepath.Join(os.Getenv("HOME"), ".vs-claude")
 
-// Tool arguments structs
-type OpenFileArgs struct {
-	Path     string  `json:"path" jsonschema:"required,description=Absolute path to the file"`
-	Line     *int    `json:"line,omitempty" jsonschema:"description=Line number to highlight (optional)"`
-	EndLine  *int    `json:"endLine,omitempty" jsonschema:"description=End line for range highlight (optional)"`
-	WindowId *string `json:"windowId,omitempty" jsonschema:"description=Window ID to target (optional)"`
-}
-
-type OpenDiffArgs struct {
-	LeftPath  string  `json:"leftPath" jsonschema:"required,description=Path to the left (original) file"`
-	RightPath string  `json:"rightPath" jsonschema:"required,description=Path to the right (modified) file"`
-	Title     *string `json:"title,omitempty" jsonschema:"description=Title for the diff view (optional)"`
-	WindowId  *string `json:"windowId,omitempty" jsonschema:"description=Window ID to target (optional)"`
-}
+// No need for specific arg types - we'll pass through as JSON
 
 type WindowInfo struct {
 	Workspace   string    `json:"workspace"`
@@ -63,47 +50,49 @@ func main() {
 		server.WithToolCapabilities(true),
 	)
 
-	// Register openFile tool
+	// Register open tool
 	mcpServer.AddTool(
-		mcp.NewTool("openFile",
-			mcp.WithDescription("Open a file in VS Code with optional line highlighting"),
-			mcp.WithString("path",
-				mcp.Description("Absolute path to the file"),
-				mcp.Required(),
-			),
-			mcp.WithNumber("line",
-				mcp.Description("Line number to highlight (optional)"),
-			),
-			mcp.WithNumber("endLine",
-				mcp.Description("End line for range highlight (optional)"),
-			),
-			mcp.WithString("windowId",
-				mcp.Description("Window ID to target (optional)"),
-			),
-		),
-		handleOpenFile,
-	)
+		mcp.NewTool("open",
+			mcp.WithDescription(`Open files, diffs, or symbols in VS Code.
 
-	// Register openDiff tool
-	mcpServer.AddTool(
-		mcp.NewTool("openDiff",
-			mcp.WithDescription("Open a diff view between two files"),
-			mcp.WithString("leftPath",
-				mcp.Description("Path to the left (original) file"),
-				mcp.Required(),
-			),
-			mcp.WithString("rightPath",
-				mcp.Description("Path to the right (modified) file"),
-				mcp.Required(),
-			),
-			mcp.WithString("title",
-				mcp.Description("Title for the diff view (optional)"),
-			),
-			mcp.WithString("windowId",
-				mcp.Description("Window ID to target (optional)"),
+Basic usage:
+- Single item: {"type": "file", "path": "/path/to/file.ts"}
+- Multiple items: [{"type": "file", "path": "/a.ts"}, {"type": "diff", "left": "/b.ts", "right": "/c.ts"}]
+
+File examples:
+- Open file: {"type": "file", "path": "/Users/name/project/src/index.ts"}
+- With line range: {"type": "file", "path": "/path/to/file.ts", "startLine": 10, "endLine": 20}
+- Single line: {"type": "file", "path": "/path/to/file.ts", "startLine": 42}
+- Preview mode: {"type": "file", "path": "/path/to/README.md", "preview": true}
+
+Diff examples:
+- Compare files: {"type": "diff", "left": "/path/to/old.ts", "right": "/path/to/new.ts"}
+- With title: {"type": "diff", "left": "/a.ts", "right": "/b.ts", "title": "Custom Title"}
+
+Git diff examples:
+- Working changes: {"type": "gitDiff", "path": "/path/to/file.ts", "from": "HEAD", "to": "working"}
+- Staged changes: {"type": "gitDiff", "path": "/path/to/file.ts", "from": "HEAD", "to": "staged"}
+- Last commit: {"type": "gitDiff", "path": "/path/to/file.ts", "from": "HEAD~1", "to": "HEAD"}
+- Branch diff: {"type": "gitDiff", "path": "/path/to/file.ts", "from": "main", "to": "feature-branch"}
+- With context: {"type": "gitDiff", "path": "/path/to/file.ts", "from": "HEAD", "to": "working", "context": 10}
+
+Symbol examples:
+- Search workspace: {"type": "symbol", "query": "handleRequest"}
+- Search in file: {"type": "symbol", "query": "processData", "path": "/path/to/utils.ts"}
+- Find class: {"type": "symbol", "query": "UserService"}
+- Find interface: {"type": "symbol", "query": "IConfig"}
+
+Notes:
+- All paths must be absolute
+- startLine/endLine are optional and 1-based
+- Symbol search is case-sensitive exact match
+- Git diff works even if file doesn't exist in one revision (shows as added/deleted)
+- Multiple VS Code windows: the extension will prompt which window to use`),
+			mcp.WithObject("args",
+				mcp.Description("Single item object or array of items to open. All file paths must be absolute."),
 			),
 		),
-		handleOpenDiff,
+		handleOpen,
 	)
 
 	// Start serving
@@ -113,52 +102,45 @@ func main() {
 	}
 }
 
-func handleOpenFile(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Extract arguments
+func handleOpen(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Get all arguments
 	args := request.GetArguments()
-	path, _ := args["path"].(string)
-	line, _ := args["line"].(float64)
-	endLine, _ := args["endLine"].(float64)
-	windowId, _ := args["windowId"].(string)
 
-	// Convert to our OpenFileArgs struct
-	openFileArgs := OpenFileArgs{
-		Path: path,
-	}
-	if line > 0 {
-		lineInt := int(line)
-		openFileArgs.Line = &lineInt
-	}
-	if endLine > 0 {
-		endLineInt := int(endLine)
-		openFileArgs.EndLine = &endLineInt
-	}
-	if windowId != "" {
-		openFileArgs.WindowId = &windowId
+	// Extract the actual args (MCP wraps them in an "args" object)
+	actualArgs, ok := args["args"]
+	if !ok {
+		return nil, fmt.Errorf("missing 'args' parameter")
 	}
 
-	return handleOpenFileLogic(openFileArgs)
-}
+	// Check if there's a windowId at the top level
+	windowIdInterface, hasWindowId := args["windowId"]
+	var windowIdStr string
+	if hasWindowId {
+		windowIdStr, _ = windowIdInterface.(string)
+	}
 
-func handleOpenFileLogic(args OpenFileArgs) (*mcp.CallToolResult, error) {
-	windowId, err := getTargetWindow(args.WindowId)
+	// Get the target window
+	windowId, err := getTargetWindow(&windowIdStr)
 	if err != nil {
 		return nil, err
+	}
+
+	// Marshal the actual args to pass through
+	argsJson, err := json.Marshal(actualArgs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal arguments: %v", err)
 	}
 
 	// Create command
 	cmd := Command{
 		ID:           fmt.Sprintf("%d", time.Now().UnixNano()),
-		Tool:         "openFile",
+		Tool:         "open",
+		Args:         argsJson,
 		ExpectsReply: true,
 	}
 
-	// Marshal args to preserve original structure
-	argsJson, _ := json.Marshal(args)
-	cmd.Args = argsJson
-
-	// Write command and wait for response
-	log.Printf("[COMMAND SENT] %s: %+v", cmd.Tool, string(argsJson))
+	// Send command and wait for response
+	log.Printf("[COMMAND SENT] open: %s", string(argsJson))
 	resp, err := writeCommandAndWaitForResponse(windowId, cmd, 5*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute command: %v", err)
@@ -169,84 +151,12 @@ func handleOpenFileLogic(args OpenFileArgs) (*mcp.CallToolResult, error) {
 		return nil, fmt.Errorf("command failed: %s", resp.Error)
 	}
 
-	// Return success message
-	message := fmt.Sprintf("Opened %s", filepath.Base(args.Path))
-	if args.Line != nil {
-		message += fmt.Sprintf(" at line %d", *args.Line)
-	}
-
+	// Return success
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			mcp.TextContent{
 				Type: "text",
-				Text: message,
-			},
-		},
-	}, nil
-}
-
-func handleOpenDiff(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Extract arguments
-	args := request.GetArguments()
-	leftPath, _ := args["leftPath"].(string)
-	rightPath, _ := args["rightPath"].(string)
-	title, _ := args["title"].(string)
-	windowId, _ := args["windowId"].(string)
-
-	// Convert to our OpenDiffArgs struct
-	openDiffArgs := OpenDiffArgs{
-		LeftPath:  leftPath,
-		RightPath: rightPath,
-	}
-	if title != "" {
-		openDiffArgs.Title = &title
-	}
-	if windowId != "" {
-		openDiffArgs.WindowId = &windowId
-	}
-
-	return handleOpenDiffLogic(openDiffArgs)
-}
-
-func handleOpenDiffLogic(args OpenDiffArgs) (*mcp.CallToolResult, error) {
-	windowId, err := getTargetWindow(args.WindowId)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create command
-	cmd := Command{
-		ID:           fmt.Sprintf("%d", time.Now().UnixNano()),
-		Tool:         "openDiff",
-		ExpectsReply: true,
-	}
-
-	// Marshal args to preserve original structure
-	argsJson, _ := json.Marshal(args)
-	cmd.Args = argsJson
-
-	// Write command and wait for response
-	log.Printf("[COMMAND SENT] %s: %+v", cmd.Tool, string(argsJson))
-	resp, err := writeCommandAndWaitForResponse(windowId, cmd, 5*time.Second)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute command: %v", err)
-	}
-
-	// Check if command succeeded
-	if !resp.Success {
-		return nil, fmt.Errorf("command failed: %s", resp.Error)
-	}
-
-	// Return success message
-	message := fmt.Sprintf("Opened diff: %s ↔ %s",
-		filepath.Base(args.LeftPath),
-		filepath.Base(args.RightPath))
-
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			mcp.TextContent{
-				Type: "text",
-				Text: message,
+				Text: "Successfully opened items in VS Code",
 			},
 		},
 	}, nil

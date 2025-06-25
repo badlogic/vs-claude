@@ -13,6 +13,7 @@ interface OpenFileItem {
     path: string;
     startLine?: number;
     endLine?: number;
+    preview?: boolean;
 }
 
 interface OpenDiffItem {
@@ -94,10 +95,10 @@ export class OpenHandler {
         const uri = vscode.Uri.file(item.path);
         const doc = await vscode.workspace.openTextDocument(uri);
 
-        // Use preserveFocus: true to keep existing tabs open
+        // Use the preview property from the item, defaulting to false
         const editor = await vscode.window.showTextDocument(doc, {
-            preview: false, // Don't open in preview mode
-            preserveFocus: false, // Focus the new tab
+            preview: item.preview ?? false, // Use item.preview if specified, otherwise default to false
+            preserveFocus: item.preview === true, // Keep focus on current editor if preview mode
         });
 
         if (item.startLine) {
