@@ -14,6 +14,19 @@
     },
     {
       "type": "npm",
+      "script": "build:debug",
+      "problemMatcher": "$tsc",
+      "label": "npm: build:debug",
+      "detail": "Build TypeScript and Go binaries for debugging",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "close": true
+      }
+    },
+    {
+      "type": "npm",
       "script": "watch",
       "problemMatcher": "$tsc-watch",
       "isBackground": true,

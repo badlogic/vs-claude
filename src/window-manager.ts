@@ -17,6 +17,7 @@ export class WindowManager {
     private metadataFile: string;
     private responseFile: string;
     private fileWatcher: fs.FSWatcher | undefined;
+    private responseStream: fs.WriteStream | undefined;
     private heartbeatInterval: NodeJS.Timeout | undefined;
     private vsClaudeDir: string;
     private commandHandler: CommandHandler;
@@ -31,29 +32,23 @@ export class WindowManager {
     }
 
     async initialize(): Promise<void> {
-        // Ensure .vsclaude directory exists
         if (!fs.existsSync(this.vsClaudeDir)) {
             fs.mkdirSync(this.vsClaudeDir, { recursive: true });
         }
 
-        // Log file paths
         this.outputChannel.appendLine(`VS Claude Window Manager initialized with window ID: ${this.windowId}`);
         this.outputChannel.appendLine(`Directory: ${this.vsClaudeDir}`);
         this.outputChannel.appendLine(`Metadata file: ${this.metadataFile}`);
         this.outputChannel.appendLine(`Command file: ${this.commandFile}`);
         this.outputChannel.appendLine(`Response file: ${this.responseFile}`);
 
-        // Write initial window metadata
         await this.updateWindowMetadata();
 
-        // Start heartbeat to touch the file every second
         this.heartbeatInterval = setInterval(() => {
-            // Just touch the file to update its modification time
             const now = new Date();
             fs.utimesSync(this.metadataFile, now, now);
-        }, 1000); // Every second
+        }, 1000);
 
-        // Start watching for commands
         this.startCommandWatcher();
     }
 
@@ -66,7 +61,10 @@ export class WindowManager {
             this.fileWatcher.close();
         }
 
-        // Remove command, metadata, and response files
+        if (this.responseStream) {
+            this.responseStream.end();
+        }
+
         try {
             if (fs.existsSync(this.commandFile)) {
                 fs.unlinkSync(this.commandFile);
@@ -86,21 +84,35 @@ export class WindowManager {
     }
 
     private generateWindowId(): string {
-        return crypto.randomBytes(4).toString('hex');
+        const randomBytes = crypto.randomBytes(16).toString('hex');
+        const timestamp = Date.now().toString(36);
+        return `${timestamp}-${randomBytes.substring(0, 16)}`;
     }
 
     private async writeResponse(response: CommandResponse): Promise<void> {
-        try {
+        return new Promise((resolve, reject) => {
+            if (!this.responseStream) {
+                reject(new Error('Response stream not initialized'));
+                return;
+            }
             const responseData = `${JSON.stringify(response)}\n`;
+            this.responseStream.write(responseData, (error) => {
+                if (error) {
+                    this.outputChannel.appendLine(`Failed to write response: ${error}`);
+                    reject(error);
+                    return;
+                }
 
-            // Use appendFileSync which is atomic for small writes
-            // Since our JSON lines are small, this will be atomic
-            fs.appendFileSync(this.responseFile, responseData, { flag: 'a' });
-
-            this.outputChannel.appendLine(`[RESPONSE SENT] ${JSON.stringify(response)}`);
-        } catch (error) {
-            this.outputChannel.appendLine(`Failed to write response: ${error}`);
-        }
+                // Force flush to ensure data is written immediately
+                // This is critical for the MCP server to read the response without delay
+                // Use cork/uncork pattern which internally flushes
+                if (this.responseStream) {
+                    this.responseStream.uncork();
+                }
+                this.outputChannel.appendLine(`[RESPONSE SENT] ${JSON.stringify(response)}`);
+                resolve();
+            });
+        });
     }
 
     private async updateWindowMetadata(): Promise<void> {
@@ -117,17 +129,25 @@ export class WindowManager {
     }
 
     private startCommandWatcher(): void {
-        // Create empty command file if it doesn't exist
         if (!fs.existsSync(this.commandFile)) {
             fs.writeFileSync(this.commandFile, '');
             this.outputChannel.appendLine(`Created command file: ${this.commandFile}`);
         }
 
-        // Create empty response file if it doesn't exist
         if (!fs.existsSync(this.responseFile)) {
             fs.writeFileSync(this.responseFile, '');
             this.outputChannel.appendLine(`Created response file: ${this.responseFile}`);
         }
+
+        this.responseStream = fs.createWriteStream(this.responseFile, {
+            flags: 'a',
+            encoding: 'utf8',
+            autoClose: false, // Keep stream open for multiple writes
+        });
+
+        this.responseStream.on('error', (error) => {
+            this.outputChannel.appendLine(`Response stream error: ${error}`);
+        });
 
         let lastPosition = 0;
 

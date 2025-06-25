@@ -5,7 +5,6 @@ export interface Command {
     id: string;
     tool: string;
     args: unknown; // Raw JSON args passed through from MCP
-    expectsReply?: boolean;
 }
 
 export interface CommandResponse {

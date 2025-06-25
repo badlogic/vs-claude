@@ -25,10 +25,9 @@ type WindowInfo struct {
 }
 
 type Command struct {
-	ID           string          `json:"id"`
-	Tool         string          `json:"tool"`
-	Args         json.RawMessage `json:"args"`
-	ExpectsReply bool            `json:"expectsReply,omitempty"`
+	ID   string          `json:"id"`
+	Tool string          `json:"tool"`
+	Args json.RawMessage `json:"args"`
 }
 
 type CommandResponse struct {
@@ -133,15 +132,14 @@ func handleOpen(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTool
 
 	// Create command
 	cmd := Command{
-		ID:           fmt.Sprintf("%d", time.Now().UnixNano()),
-		Tool:         "open",
-		Args:         argsJson,
-		ExpectsReply: true,
+		ID:   fmt.Sprintf("%d", time.Now().UnixNano()),
+		Tool: "open",
+		Args: argsJson,
 	}
 
 	// Send command and wait for response
 	log.Printf("[COMMAND SENT] open: %s", string(argsJson))
-	resp, err := writeCommandAndWaitForResponse(windowId, cmd, 5*time.Second)
+	resp, err := writeCommand(windowId, cmd, 5*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute command: %v", err)
 	}
@@ -250,12 +248,12 @@ func getActiveWindows() (map[string]*WindowInfo, error) {
 	return windows, nil
 }
 
-// writeCommandAndWaitForResponse writes a command and waits for a response if expectsReply is true.
+// writeCommand writes a command and waits for a response.
 // Recommended timeout values:
 //   - 5s for quick operations (file open, navigation)
 //   - 30s for operations that might require user interaction
 //   - 60s for operations that might involve heavy computation
-func writeCommandAndWaitForResponse(windowId string, cmd Command, timeout time.Duration) (*CommandResponse, error) {
+func writeCommand(windowId string, cmd Command, timeout time.Duration) (*CommandResponse, error) {
 	// Write the command
 	cmdFile := filepath.Join(vsClaudeDir, fmt.Sprintf("%s.in", windowId))
 
@@ -275,22 +273,17 @@ func writeCommandAndWaitForResponse(windowId string, cmd Command, timeout time.D
 		return nil, fmt.Errorf("failed to flush command: %v", err)
 	}
 
-	// If no response expected, return immediately
-	if !cmd.ExpectsReply {
-		return nil, nil
-	}
-
 	// Watch for response
 	respFile := filepath.Join(vsClaudeDir, fmt.Sprintf("%s.out", windowId))
 
 	// Set up timeout
 	deadline := time.Now().Add(timeout)
 
-	// Track last read position
+	// Track last read position and incomplete line buffer
 	var lastPosition int64 = 0
+	var incompleteBuffer string = ""
 
 	// Poll for response every 50ms until timeout
-	// Default timeout should be set by caller (e.g., 5 seconds)
 	for time.Now().Before(deadline) {
 		// Open file to check size and read from last position
 		file, err := os.Open(respFile)
@@ -326,20 +319,21 @@ func writeCommandAndWaitForResponse(windowId string, cmd Command, timeout time.D
 				return nil, fmt.Errorf("failed to read response file: %v", err)
 			}
 
-			// Update last position
+			// Update last position to reflect all bytes read
 			lastPosition += int64(n)
 
-			// Parse new lines looking for our response
-			// Handle partial line at the end
-			dataStr := string(newData)
+			// Combine with any incomplete buffer from last read
+			dataStr := incompleteBuffer + string(newData)
 			lines := strings.Split(dataStr, "\n")
 
-			// Check if last line is complete (ends with newline)
+			// Check if last line is complete
 			if len(lines) > 0 && !strings.HasSuffix(dataStr, "\n") {
-				// Last line is incomplete, adjust position to re-read it next time
-				lastLine := lines[len(lines)-1]
-				lastPosition -= int64(len(lastLine))
+				// Last line is incomplete, save it for next iteration
+				incompleteBuffer = lines[len(lines)-1]
 				lines = lines[:len(lines)-1]
+			} else {
+				// All lines are complete
+				incompleteBuffer = ""
 			}
 
 			for _, line := range lines {
