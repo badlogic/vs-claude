@@ -1,0 +1,10 @@
+{
+  "timeout": 10000,
+  "slow": 2000,
+  "reporter": "spec",
+  "ui": "tdd",
+  "color": true,
+  "bail": false,
+  "retries": 0,
+  "exit": true
+}

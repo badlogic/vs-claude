@@ -38,6 +38,6 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["src/**/*.ts", "src/**/*.js"]
+    "includes": ["src/**/*.ts", "src/**/*.js", "test/**/*.ts", "test/**/*.js"]
   }
 }
