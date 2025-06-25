@@ -1,51 +1,58 @@
 import * as assert from 'assert';
-import * as sinon from 'sinon';
-import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
+import * as fs from 'fs';
 import { findGitRoot } from '../../src/git-utils';
 
 suite('Git Utils Test Suite', () => {
-    let sandbox: sinon.SinonSandbox;
-
-    setup(() => {
-        sandbox = sinon.createSandbox();
-    });
-
-    teardown(() => {
-        sandbox.restore();
-    });
-
-    test('Should find git root in current directory', () => {
-        const testPath = '/test/project';
-        const gitPath = path.join(testPath, '.git');
+    // Test with real directories that we know exist
+    test('Should find git root in VS Claude project', function() {
+        // This test runs in the VS Claude project which has a .git directory
+        const projectRoot = path.resolve(__dirname, '..', '..', '..');
+        const testPath = path.join(projectRoot, 'src', 'test');
         
-        sandbox.stub(fs, 'existsSync').callsFake((p) => {
-            return p === gitPath;
-        });
-
         const result = findGitRoot(testPath);
-        assert.strictEqual(result, testPath);
-    });
-
-    test('Should find git root in parent directory', () => {
-        const testPath = '/test/project/src/components';
-        const projectRoot = '/test/project';
-        const gitPath = path.join(projectRoot, '.git');
         
-        sandbox.stub(fs, 'existsSync').callsFake((p) => {
-            return p === gitPath;
-        });
-
-        const result = findGitRoot(testPath);
+        // Should find the project root
         assert.strictEqual(result, projectRoot);
     });
 
-    test('Should return null when no git root found', () => {
-        const testPath = '/test/project/src';
+    test('Should return null when starting from system root', () => {
+        // Start from a path that definitely has no git root
+        const systemRoot = process.platform === 'win32' ? 'C:\\' : '/';
         
-        sandbox.stub(fs, 'existsSync').returns(false);
+        const result = findGitRoot(systemRoot);
+        
+        assert.strictEqual(result, null);
+    });
 
-        const result = findGitRoot(testPath);
+    test('Should handle non-existent paths gracefully', () => {
+        // Test with a path that doesn't exist
+        const nonExistentPath = path.join(os.tmpdir(), 'definitely-does-not-exist-' + Date.now());
+        
+        const result = findGitRoot(nonExistentPath);
+        
+        // Should return null without throwing
+        assert.strictEqual(result, null);
+    });
+
+    test('Path traversal should stop at root', () => {
+        // Create a deep path that doesn't exist
+        const deepPath = process.platform === 'win32' 
+            ? 'C:\\fake\\deep\\path\\that\\does\\not\\exist'
+            : '/fake/deep/path/that/does/not/exist';
+        
+        // Should not throw and should return null
+        const result = findGitRoot(deepPath);
+        assert.strictEqual(result, null);
+    });
+
+    test('Should handle paths with special characters', () => {
+        // Test with paths that have spaces and special characters
+        const specialPath = path.join(os.tmpdir(), 'path with spaces', 'and-dashes', 'sub_folder');
+        
+        // Should handle gracefully
+        const result = findGitRoot(specialPath);
         assert.strictEqual(result, null);
     });
 });

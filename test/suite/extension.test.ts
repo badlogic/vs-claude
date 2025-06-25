@@ -1,28 +1,77 @@
 import * as assert from 'assert';
-
-// You can import and use all API from the 'vscode' module
-// as well as import your extension to test it
 import * as vscode from 'vscode';
-// import * as myExtension from '../../extension';
+import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
 
 suite('Extension Test Suite', () => {
-    vscode.window.showInformationMessage('Start all tests.');
+    let extension: vscode.Extension<any> | undefined;
+
+    suiteSetup(async function() {
+        // Increase timeout for suite setup
+        this.timeout(30000);
+
+        // Get the extension
+        extension = vscode.extensions.getExtension('vs-claude.vs-claude');
+        assert.ok(extension, 'Extension should be present');
+
+        // Wait for extension to activate
+        if (extension && !extension.isActive) {
+            await extension.activate();
+            // Give it a moment to fully initialize
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    });
 
     test('Extension should be present', () => {
-        assert.ok(vscode.extensions.getExtension('vs-claude.vs-claude'));
+        assert.ok(extension);
     });
 
-    test('Should activate', async () => {
-        const ext = vscode.extensions.getExtension('vs-claude.vs-claude');
-        if (ext && !ext.isActive) {
-            await ext.activate();
-        }
-        assert.ok(ext?.isActive);
+    test('Extension should be active', () => {
+        assert.ok(extension?.isActive);
     });
 
-    test('Commands should be registered', async () => {
+    test('Commands should be registered', async function() {
+        this.timeout(10000);
+        
         const commands = await vscode.commands.getCommands();
-        assert.ok(commands.includes('vs-claude.showSetup'));
-        assert.ok(commands.includes('vs-claude.uninstall'));
+        assert.ok(commands.includes('vs-claude.showSetup'), 'vs-claude.showSetup command should be registered');
+        assert.ok(commands.includes('vs-claude.uninstall'), 'vs-claude.uninstall command should be registered');
+    });
+
+    test('VS Claude directory should be created', async function() {
+        this.timeout(10000);
+        
+        // Wait a bit for the extension to fully initialize
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const vsClaudeDir = path.join(os.homedir(), '.vs-claude');
+        assert.ok(fs.existsSync(vsClaudeDir), 'VS Claude directory should exist');
+    });
+
+    test('Window metadata file should be created', async function() {
+        this.timeout(10000);
+        
+        const vsClaudeDir = path.join(os.homedir(), '.vs-claude');
+        
+        // List files in the directory to find metadata files
+        const files = fs.readdirSync(vsClaudeDir);
+        const metaFiles = files.filter(f => f.endsWith('.meta.json'));
+        
+        assert.ok(metaFiles.length > 0, 'At least one metadata file should exist');
+    });
+
+    test('Command and response files should be created', async function() {
+        this.timeout(10000);
+        
+        const vsClaudeDir = path.join(os.homedir(), '.vs-claude');
+        
+        // List files in the directory
+        const files = fs.readdirSync(vsClaudeDir);
+        const inFiles = files.filter(f => f.endsWith('.in'));
+        const outFiles = files.filter(f => f.endsWith('.out'));
+        
+        assert.ok(inFiles.length > 0, 'At least one command file should exist');
+        assert.ok(outFiles.length > 0, 'At least one response file should exist');
     });
 });
