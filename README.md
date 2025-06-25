@@ -1,15 +1,35 @@
+<p align="center">
+  <img src="logo.png" alt="VS Claude Logo" width="128" height="128">
+</p>
+
 # VS Claude
 
-A VS Code extension that enables Claude (Anthropic's AI assistant) to control Visual Studio Code through the Model Context Protocol (MCP). This allows Claude to open files, navigate to specific lines, and create diff views directly in your VS Code editor.
+A VS Code extension that enables Claude Code (or any other MCP-enabled tool) to control Visual Studio Code through the Model Context Protocol (MCP). This allows Claude to open files, navigate to specific lines, and create diff views directly in your VS Code editor.
 
 ## What is VS Claude?
 
 VS Claude acts as a bridge between Claude and your VS Code editor. When you're chatting with Claude about code, Claude can:
-- Open specific files in your VS Code editor
-- Jump to exact line numbers
-- Highlight code ranges
-- Show diffs between files
-- Work with multiple VS Code windows
+- **Open specific files in your VS Code editor**
+  - "Open the main.go file in VS Code"
+  - "Show me the package.json file in VS Code"
+- **Highlight code ranges**
+  - "Show me the main loop in glfw-example.cpp in VS Code"
+  - "Find where we write to the channel file and highlight it in VS Code"
+  - "Highlight all usages of the updatePhysics method in Skeleton.cs in VS Code"
+  - "Show me all the error handling blocks in main.py in VS Code"
+- **Show diffs between files**
+  - "Compare old.js with new.js in VS Code"
+  - "Show me the diff between config.json and config.backup.json in VS Code"
+- **Show git diffs**
+  - "Show me the git diff for Animation.java between branches 4.2 and 4.3-beta in VS Code"
+  - "Show me git diff for State.ts, working vs last commit in VS Code"
+  - "Show me what changed in main.py in the last commit in VS Code"
+  - "Show the staged changes for UserService.java in VS Code"
+- **Navigate to symbols and functions**
+  - "Find the handleRequest function in VS Code"
+  - "Go to the definition of the UserService class in VS Code"
+- **Work with multiple VS Code windows**
+  - Claude will automatically detect and let you choose which window to use
 
 ## Installation
 

@@ -60,8 +60,27 @@ export class OpenHandler {
                 items = [args];
             }
 
-            // Process each item
+            // Group file items by path to handle multiple highlights
+            const fileGroups = new Map<string, OpenFileItem[]>();
+            const otherItems: OpenItem[] = [];
+
             for (const item of items) {
+                if (item.type === 'file') {
+                    const existing = fileGroups.get(item.path) || [];
+                    existing.push(item);
+                    fileGroups.set(item.path, existing);
+                } else {
+                    otherItems.push(item);
+                }
+            }
+
+            // Process grouped file items
+            for (const [_path, fileItems] of fileGroups) {
+                await this.openFileWithMultipleSelections(fileItems);
+            }
+
+            // Process other items
+            for (const item of otherItems) {
                 await this.openItem(item);
             }
 
@@ -112,6 +131,50 @@ export class OpenHandler {
             const range = new vscode.Range(startPos, endPos);
             editor.selection = new vscode.Selection(startPos, endPos);
             editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+        }
+    }
+
+    private async openFileWithMultipleSelections(items: OpenFileItem[]): Promise<void> {
+        if (items.length === 0) return;
+
+        const uri = vscode.Uri.file(items[0].path);
+        const doc = await vscode.workspace.openTextDocument(uri);
+
+        // Use the preview property from the first item
+        const editor = await vscode.window.showTextDocument(doc, {
+            preview: items[0].preview ?? false,
+            preserveFocus: items[0].preview === true,
+        });
+
+        // Create selections for all items with line ranges
+        const selections: vscode.Selection[] = [];
+        let firstRange: vscode.Range | undefined;
+
+        for (const item of items) {
+            if (item.startLine) {
+                const startLine = item.startLine - 1;
+                const endLine = item.endLine ? item.endLine - 1 : startLine;
+
+                const startPos = new vscode.Position(startLine, 0);
+                const endLineLength = doc.lineAt(endLine).text.length;
+                const endPos = new vscode.Position(endLine, endLineLength);
+
+                selections.push(new vscode.Selection(startPos, endPos));
+
+                if (!firstRange) {
+                    firstRange = new vscode.Range(startPos, endPos);
+                }
+            }
+        }
+
+        if (selections.length > 0) {
+            // Set all selections at once
+            editor.selections = selections;
+
+            // Reveal the first range
+            if (firstRange) {
+                editor.revealRange(firstRange, vscode.TextEditorRevealType.InCenter);
+            }
         }
     }
 

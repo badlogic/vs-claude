@@ -25,18 +25,15 @@ export class SetupManager {
             return;
         }
 
-        // Check if vs-claude is already installed and get its path
         const installedPath = await this.checkInstallation();
 
         if (installedPath) {
             this.outputChannel.appendLine(`VS Claude MCP server found at: ${installedPath}`);
 
-            // Check if the installed path matches our expected path
             if (installedPath === mcpServerPath) {
                 this.outputChannel.appendLine('VS Claude MCP server is correctly installed');
                 return;
             } else {
-                // Path mismatch - prompt user
                 this.outputChannel.appendLine(`Path mismatch! Expected: ${mcpServerPath}, Found: ${installedPath}`);
 
                 const result = await vscode.window.showWarningMessage(
@@ -51,7 +48,6 @@ export class SetupManager {
                 );
 
                 if (result === 'Update') {
-                    // Remove old and install new
                     this.outputChannel.appendLine('Removing old VS Claude installation...');
                     try {
                         await execAsync('claude mcp remove -s user vs-claude');
@@ -66,12 +62,10 @@ export class SetupManager {
                 } else if (result === 'Manual Setup') {
                     await this.showManualInstructions(mcpServerPath);
                 }
-                // If 'Keep Current', do nothing
                 return;
             }
         }
 
-        // Not installed, prompt user
         this.outputChannel.appendLine('Showing installation prompt...');
         const result = await vscode.window.showInformationMessage(
             'VS Claude MCP not configured',
@@ -92,14 +86,12 @@ export class SetupManager {
     }
 
     async uninstallMCP(): Promise<void> {
-        // Check if vs-claude is installed
         const installedPath = await this.checkInstallation();
         if (!installedPath) {
             this.outputChannel.appendLine('VS Claude MCP server is not installed.');
             return;
         }
 
-        // Confirm uninstall
         const confirm = await vscode.window.showWarningMessage(
             'Are you sure you want to uninstall VS Claude MCP server?',
             'Uninstall',
@@ -110,7 +102,6 @@ export class SetupManager {
             return;
         }
 
-        // Perform uninstall
         try {
             this.outputChannel.appendLine('Uninstalling VS Claude MCP server...');
             this.outputChannel.appendLine('Command: claude mcp remove -s user vs-claude');
@@ -207,15 +198,17 @@ export class SetupManager {
             {
                 enableScripts: true,
                 retainContextWhenHidden: true,
+                localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, '')],
             }
         );
 
         const escapedPath = mcpServerPath.replace(/\\/g, '\\\\');
         const command = `claude mcp add -s user vs-claude "${mcpServerPath}"`;
 
-        panel.webview.html = this.getWebviewContent(command, escapedPath, mcpServerPath);
+        const logoUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'logo.png'));
 
-        // Handle messages from the webview
+        panel.webview.html = this.getWebviewContent(command, escapedPath, mcpServerPath, logoUri);
+
         panel.webview.onDidReceiveMessage(
             async (message) => {
                 switch (message.type) {
@@ -229,7 +222,12 @@ export class SetupManager {
         );
     }
 
-    private getWebviewContent(command: string, escapedPath: string, mcpServerPath: string): string {
+    private getWebviewContent(
+        command: string,
+        escapedPath: string,
+        mcpServerPath: string,
+        logoUri: vscode.Uri
+    ): string {
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -262,16 +260,8 @@ export class SetupManager {
         .logo {
             width: 80px;
             height: 80px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            font-weight: 700;
-            color: white;
             margin: 0 auto 24px;
-            box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+            display: block;
         }
 
         h1 {
@@ -433,7 +423,7 @@ export class SetupManager {
 <body>
     <div class="container">
         <div class="header">
-            <div class="logo">VS</div>
+            <img src="${logoUri}" alt="VS Claude Logo" class="logo" />
             <h1>Install VS Claude MCP</h1>
             <p class="subtitle">Connect Claude to your VS Code environment</p>
         </div>

@@ -4,6 +4,7 @@
   "description": "MCP server for Claude to control VS Code",
   "version": "0.0.1",
   "publisher": "vs-claude",
+  "icon": "logo.png",
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -17,6 +18,9 @@
   ],
   "activationEvents": [
     "onStartupFinished"
+  ],
+  "extensionDependencies": [
+    "vscode.git"
   ],
   "contributes": {
     "commands": [
