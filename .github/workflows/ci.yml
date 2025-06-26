@@ -42,7 +42,7 @@ jobs:
         cd ..
     
     - name: Build VSIX package
-      run: npx vsce package --no-dependencies
+      run: npx @vscode/vsce package --no-dependencies
       
     - name: Upload VSIX artifact
       uses: actions/upload-artifact@v4

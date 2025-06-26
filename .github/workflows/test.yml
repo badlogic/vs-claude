@@ -204,12 +204,15 @@ jobs:
     
     - name: Run linter and formatter
       run: npm run check
+      shell: bash
     
     - name: Build extension
       run: npm run build
+      shell: bash
     
     - name: Run tests
       run: npm test
+      shell: bash
       timeout-minutes: 15
     
     - name: Upload test logs
