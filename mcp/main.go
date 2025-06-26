@@ -52,7 +52,8 @@ func main() {
 	// Register open tool
 	mcpServer.AddTool(
 		mcp.NewTool("open",
-			mcp.WithDescription(`Open files, diffs, or symbols in VS Code.
+			mcp.WithDescription(`Open files, diffs, or navigate to specific locations in VS Code.
+This tool opens known file paths and locations. To search for symbols or code, use the query tool first.
 
 Basic usage:
 - Single item: {"type": "file", "path": "/path/to/file.ts"}
@@ -75,23 +76,141 @@ Git diff examples:
 - Branch diff: {"type": "gitDiff", "path": "/path/to/file.ts", "from": "main", "to": "feature-branch"}
 - With context: {"type": "gitDiff", "path": "/path/to/file.ts", "from": "HEAD", "to": "working", "context": 10}
 
-Symbol examples:
-- Search workspace: {"type": "symbol", "query": "handleRequest"}
-- Search in file: {"type": "symbol", "query": "processData", "path": "/path/to/utils.ts"}
-- Find class: {"type": "symbol", "query": "UserService"}
-- Find interface: {"type": "symbol", "query": "IConfig"}
-
 Notes:
 - All paths must be absolute
 - startLine/endLine are optional and 1-based
-- Symbol search is case-sensitive exact match
 - Git diff works even if file doesn't exist in one revision (shows as added/deleted)
-- Multiple VS Code windows: the extension will prompt which window to use`),
+- Multiple VS Code windows: the extension will prompt which window to use
+- To search for symbols, use the query tool first, then open the results`),
 			mcp.WithObject("args",
 				mcp.Description("Single item object or array of items to open. All file paths must be absolute."),
 			),
 		),
 		handleOpen,
+	)
+
+	// Register query tool
+	mcpServer.AddTool(
+		mcp.NewTool("query",
+			mcp.WithDescription(`Query VS Code's language intelligence features for code understanding.
+
+IMPORTANT: This is the PREFERRED tool for code navigation and analysis. Use this instead of grep/ripgrep when you need to:
+- Find where classes, methods, functions, variables are defined
+- Navigate to specific symbols or types
+- Understand code structure and hierarchy
+- Get type information and relationships
+- Find all usages/references of a symbol
+- Analyze code organization
+
+This tool leverages VS Code's Language Server Protocol (LSP) for accurate, semantic code understanding across all supported languages.
+
+You can send a single query or multiple queries in one call:
+
+Single query:
+{"type": "findSymbols", "query": "handle*"}
+
+Multiple queries (executed in parallel):
+[
+  {"type": "findSymbols", "query": "handle*"},
+  {"type": "outline", "path": "/path/to/file.ts"},
+  {"type": "diagnostics"}
+]
+
+Batch query response format:
+[
+  [array of results],          // Successful query returns array directly
+  [],                          // Empty array for no results
+  {"error": "error message"}   // Failed query returns error object
+]
+
+Query types (with required parameters marked):
+
+1. Find Symbols - Search for symbols across the entire workspace
+   USE THIS to find where symbols are defined in the codebase!
+   
+   Parameters: query (required), path?, kind?, exact?
+   - query: The symbol name to search for (e.g., "Animation", "handle*")
+   - kind: Filter by symbol type (e.g., "class", "method", "interface")
+   - path: Limit results to a specific file
+   - exact: Use exact matching instead of pattern matching
+   
+   {"type": "findSymbols", "query": "Animation"}  // find all symbols named Animation
+   {"type": "findSymbols", "query": "*", "kind": "class"}  // find ALL classes in workspace
+   {"type": "findSymbols", "query": "get*", "kind": "method"}  // find all getter methods
+   {"type": "findSymbols", "query": "process*", "path": "/path/to/file.ts"}  // limit results to specific file
+   {"type": "findSymbols", "query": "Skeleton", "exact": true}  // exact name match
+   {"type": "findSymbols", "query": "handle*", "kind": "function,method"}  // only functions/methods
+
+2. Get File Outline - Understand file/class structure, see methods/fields/properties
+   USE THIS to explore a file's API and structure!
+   
+   Parameters: path (required), symbol?, kind?
+   
+   {"type": "outline", "path": "/path/to/file.ts"}  // full file structure
+   {"type": "outline", "path": "/path/to/file.ts", "symbol": "Animation"}  // outline of specific class
+   {"type": "outline", "path": "/path/to/file.ts", "symbol": "Animation", "kind": "method"}  // only methods of Animation
+   {"type": "outline", "path": "/path/to/file.ts", "kind": "method"}  // all methods in file
+   {"type": "outline", "path": "/path/to/file.ts", "kind": "field,property"}  // all fields/properties in file
+
+3. Get Diagnostics - Get compilation errors, warnings, and issues
+   
+   Parameters: path?
+   
+   {"type": "diagnostics"}  // all workspace errors/warnings
+   {"type": "diagnostics", "path": "/path/to/file.ts"}  // errors in specific file
+
+4. Find References - Find all usages of the symbol at a specific location
+   USE THIS to understand code impact and dependencies!
+   
+   Parameters: path (required), line (required), character?
+   - path: File containing the symbol
+   - line: Line number where the symbol is located (1-based)
+   - character: Optional column position on the line
+   
+   {"type": "references", "path": "/path/to/file.ts", "line": 42}  // find all usages of symbol on line 42
+   {"type": "references", "path": "/path/to/file.ts", "line": 42, "character": 15}  // more precise position
+
+Returns JSON data with symbol locations including line numbers.
+
+Example responses (TypeScript types available in extension):
+
+findSymbols returns Symbol[]:
+[{"name": "getUser", "kind": "Method", "path": "/path/file.ts:50:1-55:20", "containedIn": "UserService", 
+  "detail": "getUser(id: string): Promise<User>"}]
+
+outline returns OutlineResult[]:
+[{"name": "Animation", "detail": "export class", "kind": "Class", "location": "10:1-50:2", 
+  "children": [{"name": "play", "kind": "Method", "location": "15:3-20:4"}]}]
+
+diagnostics returns DiagnosticsResult[]:
+[{"path": "/path/file.ts:10:5", "severity": "error", "message": "Cannot find name 'foo'", "source": "ts"}]
+
+references returns ReferencesResult[]:
+[{"path": "/path/file.ts:25:10", "preview": "const x = processUser(data);"}]
+
+When to use this tool vs others:
+✓ Use query tool FIRST for: Finding definitions, understanding code structure, navigating to symbols
+✗ Don't use grep/ripgrep for: Finding classes, methods, or understanding code - use query instead
+✗ Don't read entire files for: Getting a file's methods/classes - use outline instead
+
+If this tool doesn't return expected results:
+- Language server might not support the file type (e.g., some config files, scripts)
+- The file or symbol might not yet be indexed or not be part of the VS Code workspace
+- Fall back to grep/ripgrep for text searches or Read tool for detailed inspection
+
+Notes:
+- Multiple queries run in parallel for performance
+- Use exact:true for precise matching, wildcards (*) for patterns
+- Available symbol kinds: class, method, property, field, constructor, function, variable,
+  constant, enum, interface, namespace, package, module, struct, type (=class+interface+struct+enum)
+- Batch queries: all execute even if some fail, each has its own success/error status
+- Language support varies by installed VS Code extensions
+- All paths must be absolute`),
+			mcp.WithObject("args",
+				mcp.Description("Single query object or array of query objects"),
+			),
+		),
+		handleQuery,
 	)
 
 	// Start serving
@@ -155,6 +274,61 @@ func handleOpen(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTool
 			mcp.TextContent{
 				Type: "text",
 				Text: "Successfully opened items in VS Code",
+			},
+		},
+	}, nil
+}
+
+func handleQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Get the args argument
+	args := request.GetArguments()
+	argsArg, exists := args["args"]
+	if !exists {
+		return nil, fmt.Errorf("missing 'args' argument")
+	}
+
+	// Marshal the args to JSON (it's already in the right format)
+	argsJSON, err := json.Marshal(argsArg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal args: %v", err)
+	}
+
+	// No specific window handling for queries - use any available window
+	windowId, err := getTargetWindow(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Send command to extension
+	cmd := Command{
+		ID:   fmt.Sprintf("query-%d", time.Now().UnixNano()),
+		Tool: "query",
+		Args: argsJSON,
+	}
+
+	response, err := writeCommand(windowId, cmd, 5*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %v", err)
+	}
+
+	// Return the response directly
+	if !response.Success {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Query failed: %s", response.Error),
+				},
+			},
+		}, nil
+	}
+
+	// Return the data directly
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: string(response.Data),
 			},
 		},
 	}, nil
