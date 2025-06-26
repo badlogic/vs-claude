@@ -349,33 +349,21 @@ export class QueryHandler {
 				if (documentSymbols && documentSymbols.length > 0) {
 					// Apply the full original query to the document symbols
 					let filtered = this.filterSymbols(documentSymbols, query, kindFilter, '', includeDetails);
-
-					if (filtered.length === 0 && filePath.includes('Pixmap.java')) {
-						this.outputChannel.appendLine(`No symbols matched in ${filePath} for query "${query}"`);
-						this.outputChannel.appendLine(
-							`Document symbols: ${documentSymbols.map((s) => s.name).join(', ')}`
-						);
-					}
-
 					if (depth) {
 						filtered = this.limitDepth(filtered, depth);
 					}
-
 					// Add file path to top-level symbols for workspace queries
 					for (const symbol of filtered) {
 						symbol.location = `${filePath}:${symbol.location}`;
 					}
-
 					results.push(...filtered);
 				}
 			} catch (fileError) {
-				// Log the error but continue processing other files
 				this.outputChannel.appendLine(`Warning: Failed to get symbols for file ${filePath}: ${fileError}`);
 				if (fileError instanceof Error && fileError.stack) {
 					this.outputChannel.appendLine('Stack trace:');
 					this.outputChannel.appendLine(fileError.stack);
 				}
-				// Continue processing other files
 			}
 		}
 
@@ -579,31 +567,26 @@ export class QueryHandler {
 			// Build the full hierarchical path for this symbol
 			const fullPath = parentPath ? `${parentPath}.${symbol.name}` : symbol.name;
 
-			let symbolMatches = false;
-
 			if (isHierarchicalQuery) {
-				// For hierarchical queries like "Animation.get*"
-				const parentQuery = queryParts.slice(0, -1).join('.');
-				const leafQuery = queryParts[queryParts.length - 1];
+				// For hierarchical queries like "Animation.get*" or "spine.Animation.get*"
+				const firstPart = queryParts[0];
+				const remainingQuery = queryParts.slice(1).join('.');
 
-				// Check if this symbol IS the parent we're looking for
-				if (symbol.name === parentQuery || fullPath === parentQuery) {
-					// Found the parent symbol (e.g., found "Animation")
-					// Don't include the parent itself, but we'll process its children with the leaf query
-					symbolMatches = false;
-					// Special handling: we need to filter this symbol's children by the leaf query
-					if (symbol.children && symbol.children.length > 0) {
-						// Filter children by the leaf pattern
+				// Check if this symbol matches the first part of the query
+				if (this.nameAndKindMatches(symbol.name, symbol.kind, firstPart, kindFilter)) {
+					// Symbol matches first part - consume it and continue with remaining query
+					if (remainingQuery && symbol.children && symbol.children.length > 0) {
+						// More query parts to match - recurse with remaining query
 						const filteredChildren = this.filterSymbols(
 							symbol.children,
-							leafQuery, // Use just the leaf query for children
+							remainingQuery,
 							kindFilter,
-							fullPath, // Pass the current symbol as the parent path
+							fullPath,
 							includeDetails
 						);
 
 						if (filteredChildren.length > 0) {
-							// Include this parent symbol with only the filtered children
+							// Include this symbol with filtered children
 							const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
 							const sym: Symbol = {
 								name: symbol.name,
@@ -614,48 +597,57 @@ export class QueryHandler {
 							};
 							result.push(sym);
 						}
+					} else if (!remainingQuery) {
+						// No more query parts - this is the final match
+						const sym = this.convertDocumentSymbol(symbol, includeDetails);
+						result.push(sym);
 					}
-					// Continue to next symbol since we've handled this one
-					continue;
-				} else {
-					// Not the parent we're looking for, but might contain it
-					// Keep the full query for recursive search
-					symbolMatches = false;
+					// else: query expects more depth but symbol has no children - no match
+				} else if (symbol.children && symbol.children.length > 0) {
+					// Symbol doesn't match - try children with full query (don't consume)
+					const filteredChildren = this.filterSymbols(
+						symbol.children,
+						query, // Keep full query
+						kindFilter,
+						fullPath,
+						includeDetails
+					);
+
+					if (filteredChildren.length > 0) {
+						// Include this symbol with filtered children
+						const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
+						const sym: Symbol = {
+							name: symbol.name,
+							detail: symbol.detail,
+							kind: vscode.SymbolKind[symbol.kind],
+							location: this.formatRange(combinedRange),
+							children: filteredChildren,
+						};
+						result.push(sym);
+					}
 				}
 			} else {
-				// For non-hierarchical queries, use the existing logic
+				// Non-hierarchical query - use existing logic
 				const fullPathMatches = this.nameAndKindMatches(fullPath, symbol.kind, query, kindFilter);
 				const nameMatches = this.nameAndKindMatches(symbol.name, symbol.kind, query, kindFilter);
-				symbolMatches = fullPathMatches || nameMatches;
-			}
+				const symbolMatches = fullPathMatches || nameMatches;
 
-			if (symbolMatches) {
-				// Symbol matches: include it with ALL its children (unfiltered)
-				const sym = this.convertDocumentSymbol(symbol, includeDetails);
-				result.push(sym);
-			} else if (symbol.children && symbol.children.length > 0) {
-				// Symbol doesn't match: check if any descendants match
-				// Pass the current full path as parent path for children
-				const filteredChildren = this.filterSymbols(
-					symbol.children,
-					query,
-					kindFilter,
-					fullPath,
-					includeDetails
-				);
+				if (symbolMatches) {
+					// Symbol matches: include it with ALL its children (unfiltered)
+					const sym = this.convertDocumentSymbol(symbol, includeDetails);
+					result.push(sym);
+				} else if (symbol.children && symbol.children.length > 0) {
+					// Symbol doesn't match: check if any descendants match
+					const filteredChildren = this.filterSymbols(
+						symbol.children,
+						query,
+						kindFilter,
+						fullPath,
+						includeDetails
+					);
 
-				if (filteredChildren.length > 0) {
-					// Check if this is a container type (namespace, module, package)
-					const isContainer =
-						symbol.kind === vscode.SymbolKind.Namespace ||
-						symbol.kind === vscode.SymbolKind.Module ||
-						symbol.kind === vscode.SymbolKind.Package;
-
-					if (isContainer) {
-						// For containers, promote matching children to top level
-						result.push(...filteredChildren);
-					} else {
-						// For other types, include this symbol as context with only the filtered children
+					if (filteredChildren.length > 0) {
+						// Include this symbol with filtered children
 						const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
 						const sym: Symbol = {
 							name: symbol.name,
@@ -668,7 +660,6 @@ export class QueryHandler {
 					}
 				}
 			}
-			// else: symbol doesn't match and has no matching descendants - exclude it
 		}
 
 		return result;
