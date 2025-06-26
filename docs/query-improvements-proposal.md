@@ -234,17 +234,17 @@ Given that Claude (Cline) can handle streaming responses, pagination might not b
 
 ## Other Future Improvements
 
-### Configurable Timeout
-Currently, all queries timeout after 15 seconds. This could be made configurable:
+### Query Result Limits
+Instead of timeouts, implement smart result limits:
 
 ```typescript
 interface QueryRequest {
   // ... existing fields ...
-  timeout?: number; // Optional timeout in milliseconds (default: 15000)
+  maxResults?: number; // Optional max results (default: 1000)
 }
 ```
 
-This would allow:
-- Longer timeouts for complex workspace searches
-- Shorter timeouts for quick file queries
-- Per-query customization based on expected complexity
+This would:
+- Prevent overwhelming responses
+- Give predictable performance
+- Allow users to request more results if needed

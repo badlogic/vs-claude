@@ -98,8 +98,6 @@ export type QueryResponse = { result: Result } | { error: string };
 // Symbol type is defined above
 
 export class QueryHandler {
-	private readonly QUERY_TIMEOUT_MS = 15000; // 15 seconds
-
 	constructor(private outputChannel: vscode.OutputChannel) {}
 
 	async execute(request: QueryRequest | QueryRequest[]): Promise<QueryResponse[]> {
@@ -117,40 +115,25 @@ export class QueryHandler {
 		return await Promise.all(queries.map((query) => this.executeSingle(query)));
 	}
 
-	private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
-		const timeoutPromise = new Promise<never>((_, reject) => {
-			setTimeout(() => {
-				reject(new Error(`Query timeout: ${operation} took longer than ${timeoutMs}ms`));
-			}, timeoutMs);
-		});
-
-		return Promise.race([promise, timeoutPromise]);
-	}
-
 	private async executeSingle(request: QueryRequest): Promise<QueryResponse> {
 		this.outputChannel.appendLine(`Executing query: ${request.type}`);
 		this.outputChannel.appendLine(`Query args: ${JSON.stringify(request, null, 2)}`);
 
 		try {
-			// Wrap the query execution with timeout
-			const executeQuery = async (): Promise<QueryResponse> => {
-				switch (request.type) {
-					case 'symbols':
-						return await this.symbols(request);
-					case 'references':
-						return await this.findReferences(request);
-					case 'diagnostics':
-						return await this.getDiagnostics(request);
-					case 'definition':
-						return await this.findDefinition(request);
-					default: {
-						const exhaustiveCheck: never = request;
-						return { error: `Unknown query type: ${(exhaustiveCheck as QueryRequest).type}` };
-					}
+			switch (request.type) {
+				case 'symbols':
+					return await this.symbols(request);
+				case 'references':
+					return await this.findReferences(request);
+				case 'diagnostics':
+					return await this.getDiagnostics(request);
+				case 'definition':
+					return await this.findDefinition(request);
+				default: {
+					const exhaustiveCheck: never = request;
+					return { error: `Unknown query type: ${(exhaustiveCheck as QueryRequest).type}` };
 				}
-			};
-
-			return await this.withTimeout(executeQuery(), this.QUERY_TIMEOUT_MS, `${request.type} query`);
+			}
 		} catch (error) {
 			const errorMessage = `Query execution error: ${error}`;
 			this.outputChannel.appendLine(errorMessage);
@@ -165,6 +148,17 @@ export class QueryHandler {
 	private async symbols(request: SymbolsRequest): Promise<{ result: Symbol[] | CountResult } | { error: string }> {
 		try {
 			const query = request.query || '*';
+
+			// Check for overly broad queries
+			const isBroadQuery = query === '*' || query === '**' || query === '*.*';
+			const hasNoKindFilter = !request.kinds || request.kinds.length === 0;
+			const isWorkspaceScope = !request.path;
+
+			if (isBroadQuery && hasNoKindFilter && isWorkspaceScope && !request.countOnly) {
+				return {
+					error: "Query too broad: searching for '*' without any filters in workspace scope would return too many results. Please add 'kinds' filter, specify a 'path', use a more specific query pattern, or use 'countOnly' to check the size first.",
+				};
+			}
 
 			// Determine scope from path
 			let result: { result: Symbol[] } | { error: string };
@@ -189,6 +183,14 @@ export class QueryHandler {
 								error: "Folder queries require either 'depth' or 'countOnly' to prevent excessive results. Use depth:1 for overview or countOnly:true to check size first.",
 							};
 						}
+
+						// Check for overly broad folder queries too
+						if (isBroadQuery && hasNoKindFilter && !request.countOnly) {
+							return {
+								error: "Query too broad: searching for '*' without any filters in folder scope would return too many results. Please add 'kinds' filter, use a more specific query pattern, or use 'countOnly' to check the size first.",
+							};
+						}
+
 						// Folder scope - search within folder
 						result = await this.symbolsInFolder(
 							request.path,
