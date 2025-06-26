@@ -128,34 +128,30 @@ QUERY TYPES:
    {"type": "symbols", "query": "*Test", "kinds": ["class"], "countOnly": true}  // count test classes
 
 2. references - Find all usages of a symbol
-   Required: path, line (from symbols query)
-   Optional: column
+   Required: path, line, column (from symbols query)
 
    Workflow:
    1. {"type": "symbols", "query": "processUser"}  // find it first
-   2. {"type": "references", "path": "/src/user.ts", "line": 42}  // find usages
+   2. {"type": "references", "path": "/src/user.ts", "line": 42, "column": 8}  // find usages
 
 3. definition - Get the location of the definition of the symbol, e.g. function in header -> implementation in .cpp file.
-   Required: path, line
-   Optional: column
+   Required: path, line, column
 
-   {"type": "definition", "path": "/src/app.ts", "line": 25}
+   {"type": "definition", "path": "/src/app.ts", "line": 25, "column": 12}
 
-4. diagnostics - Get errors and warnings
+4. supertype - Find what a type extends/implements
+   Required: path, line, column
+
+   {"type": "supertype", "path": "/src/models/User.ts", "line": 5, "column": 14}
+
+5. subtype - Find implementations/subclasses
+   Required: path, line, column
+
+   {"type": "subtype", "path": "/src/base/Repository.ts", "line": 1, "column": 7}
+
+6. diagnostics - Get errors and warnings
    {"type": "diagnostics"}  // all workspace issues
    {"type": "diagnostics", "path": "/src/app.ts"}  // specific file
-
-5. supertype - Find what a type extends/implements
-   Required: path, line
-   Optional: column
-
-   {"type": "supertype", "path": "/src/models/User.ts", "line": 5}
-
-6. subtype - Find implementations/subclasses
-   Required: path, line
-   Optional: column
-
-   {"type": "subtype", "path": "/src/base/Repository.ts", "line": 1}
 
 RESPONSE: Always returns array of [{result: ...}] or [{error: ...}]
 For symbols: {name, kind, location, children?}
