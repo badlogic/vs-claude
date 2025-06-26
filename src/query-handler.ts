@@ -345,52 +345,56 @@ export class QueryHandler {
 		includeDetails?: boolean,
 		exclude?: string[]
 	): Promise<{ result: Symbol[] } | { error: string }> {
-		// Use same logic as workspace but filter results to folder
-		const rootQuery = query.split('.')[0];
-
-		const workspaceSymbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
-			'vscode.executeWorkspaceSymbolProvider',
-			rootQuery
-		);
-
-		if (!workspaceSymbols || workspaceSymbols.length === 0) {
-			return { result: [] };
-		}
-
-		// Filter to only symbols in the specified folder
-		const normalizedFolder = vscode.Uri.file(folderPath).fsPath;
-		const filteredSymbols = workspaceSymbols.filter((symbol) =>
-			symbol.location.uri.fsPath.startsWith(normalizedFolder)
-		);
-
-		// Group by file and process
-		const fileMap = new Map<string, vscode.SymbolInformation[]>();
-		for (const symbol of filteredSymbols) {
-			const filePath = symbol.location.uri.fsPath;
-			if (!fileMap.has(filePath)) {
-				fileMap.set(filePath, []);
-			}
-			const symbols = fileMap.get(filePath);
-			if (symbols) {
-				symbols.push(symbol);
-			}
-		}
-
+		// Instead of searching workspace and filtering, enumerate files in folder
+		const folderUri = vscode.Uri.file(folderPath);
 		const results: Symbol[] = [];
-		for (const [filePath] of fileMap) {
-			// Check exclude patterns
-			if (exclude && exclude.length > 0) {
-				const shouldExclude = exclude.some((pattern) => minimatch(filePath, pattern));
-				if (shouldExclude) {
-					continue;
-				}
-			}
 
+		// Find all files in the folder recursively
+		const findFiles = async (uri: vscode.Uri): Promise<vscode.Uri[]> => {
+			const files: vscode.Uri[] = [];
 			try {
-				const uri = vscode.Uri.file(filePath);
+				const entries = await vscode.workspace.fs.readDirectory(uri);
+
+				for (const [name, type] of entries) {
+					const childUri = vscode.Uri.joinPath(uri, name);
+					const childPath = childUri.fsPath;
+
+					// Check exclude patterns
+					if (exclude?.some((pattern) => minimatch(childPath, pattern))) {
+						continue;
+					}
+
+					if (type === vscode.FileType.File) {
+						// Only process files with known language extensions
+						if (
+							name.match(
+								/\.(ts|tsx|js|jsx|py|java|cpp|hpp|c|h|cs|go|rs|rb|php|swift|kt|scala|ml|hs|clj|ex|elm|r|jl|dart|vue|svelte)$/i
+							)
+						) {
+							files.push(childUri);
+						}
+					} else if (type === vscode.FileType.Directory) {
+						// Skip common non-source directories
+						if (!name.match(/^\.|node_modules|vendor|target|dist|build|out|bin|obj|\.git$/)) {
+							files.push(...(await findFiles(childUri)));
+						}
+					}
+				}
+			} catch (error) {
+				this.outputChannel.appendLine(`Warning: Failed to read directory ${uri.fsPath}: ${error}`);
+			}
+			return files;
+		};
+
+		const files = await findFiles(folderUri);
+		this.outputChannel.appendLine(`Found ${files.length} files in folder ${folderPath}`);
+
+		// Process each file
+		for (const fileUri of files) {
+			try {
 				const documentSymbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
 					'vscode.executeDocumentSymbolProvider',
-					uri
+					fileUri
 				);
 
 				if (documentSymbols && documentSymbols.length > 0) {
@@ -400,20 +404,34 @@ export class QueryHandler {
 						filtered = this.limitDepth(filtered, depth);
 					}
 
+					// Add file path to location for context
+					for (const symbol of filtered) {
+						this.addFilePathToSymbol(symbol, fileUri.fsPath);
+					}
+
 					results.push(...filtered);
 				}
 			} catch (fileError) {
 				// Log the error but continue processing other files
-				this.outputChannel.appendLine(`Warning: Failed to get symbols for file ${filePath}: ${fileError}`);
-				if (fileError instanceof Error && fileError.stack) {
-					this.outputChannel.appendLine('Stack trace:');
-					this.outputChannel.appendLine(fileError.stack);
-				}
-				// Continue processing other files
+				this.outputChannel.appendLine(
+					`Warning: Failed to get symbols for file ${fileUri.fsPath}: ${fileError}`
+				);
 			}
 		}
 
 		return { result: results };
+	}
+
+	private addFilePathToSymbol(symbol: Symbol, filePath: string): void {
+		// Prepend file path to location
+		symbol.location = `${filePath}:${symbol.location}`;
+
+		// Recursively update children
+		if (symbol.children) {
+			for (const child of symbol.children) {
+				this.addFilePathToSymbol(child, filePath);
+			}
+		}
 	}
 
 	private async getDiagnostics(request: DiagnosticsRequest): Promise<{ result: Diagnostic[] } | { error: string }> {
