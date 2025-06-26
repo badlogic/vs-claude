@@ -1,155 +1,89 @@
 # Query Tool Design
 
-The `query` tool allows Claude to get information about the codebase, project structure, and code intelligence data from VS Code.
+The `query` tool allows Claude to get information about the codebase using VS Code's language intelligence features. This enables better code understanding than grep/ripgrep by leveraging Language Server Protocol (LSP) capabilities.
 
-## Query Types
+## Bare Minimum Query Types
 
-### 1. Symbol Information
+### 1. Find Symbols
 ```json
 {
-  "type": "symbolInfo",
-  "symbol": "functionName",
-  "path": "/path/to/file.ts",  // optional, current file if not specified
-  "line": 42,                  // optional - will search for symbol if not provided
-  "column": 15                 // optional
+  "type": "findSymbols",
+  "query": "handle*",        // supports wildcards/partial matching
+  "path": "/path/to/file.ts" // optional - if provided, searches only in this file
 }
 ```
-Returns: Type signature, documentation, references count
+Returns: All symbols matching the query pattern with their locations and types
 
-### 2. Type Definition
+### 2. Get File Outline
 ```json
 {
-  "type": "typeDefinition",
-  "symbol": "variableName",    // optional if line/column provided
-  "path": "/path/to/file.ts",
-  "line": 42,                  // optional - will search for symbol
-  "column": 15                 // optional
-}
-```
-Returns: Full type information, interface/class definition
-
-### 3. References
-```json
-{
-  "type": "references",
-  "symbol": "functionName",
-  "path": "/path/to/file.ts",
-  "line": 10,
-  "includeDeclaration": false  // optional
-}
-```
-Returns: All locations where symbol is used
-
-### 4. Call Hierarchy
-```json
-{
-  "type": "callHierarchy",
-  "symbol": "functionName",
-  "path": "/path/to/file.ts",
-  "direction": "incoming"  // or "outgoing"
-}
-```
-Returns: What calls this function (incoming) or what this function calls (outgoing)
-
-### 5. Type Hierarchy
-```json
-{
-  "type": "typeHierarchy", 
-  "symbol": "ClassName",
-  "path": "/path/to/file.ts",
-  "direction": "supertypes"  // or "subtypes"
-}
-```
-Returns: Class/interface inheritance hierarchy
-
-### 6. Workspace Symbols
-```json
-{
-  "type": "workspaceSymbols",
-  "query": "handle*",  // supports wildcards
-  "kind": "function"   // optional: function, class, interface, variable, etc.
-}
-```
-Returns: All matching symbols in workspace
-
-### 7. Document Symbols
-```json
-{
-  "type": "documentSymbols",
+  "type": "fileOutline",
   "path": "/path/to/file.ts"
 }
 ```
-Returns: Outline of all symbols in a file
+Returns: All types, interfaces, classes, functions defined in the file with their line numbers
 
-### 8. Diagnostics
+### 3. Get Diagnostics
 ```json
 {
   "type": "diagnostics",
-  "path": "/path/to/file.ts",  // optional, all files if not specified
-  "severity": "error"           // optional: error, warning, info, hint
+  "path": "/path/to/file.ts" // optional - if provided, shows only diagnostics for this file
 }
 ```
-Returns: Current errors/warnings
+Returns: All errors and warnings with line numbers and messages
 
-### 9. Git Status
+### 4. Find References
 ```json
 {
-  "type": "gitStatus",
-  "path": "/path/to/file"  // optional, whole repo if not specified
+  "type": "references",
+  "symbol": "processUser",      // symbol name to find
+  "path": "/path/to/file.ts"    // optional - search in specific file or workspace
 }
 ```
-Returns: Git status, branch info, uncommitted changes
+Returns: All locations where this symbol is used
 
-### 10. Project Info
+## Nice to Have Query Types
+
+### 5. Go to Definition
 ```json
 {
-  "type": "projectInfo"
+  "type": "definition",
+  "symbol": "processUser",      // symbol name to find
+  "path": "/path/to/file.ts"    // optional - search in specific file or workspace
 }
 ```
-Returns: Workspace folders, active file, open editors, installed extensions
+Returns: Location(s) where the symbol is defined
 
-### 11. Hover Info
-```json
-{
-  "type": "hover",
-  "path": "/path/to/file.ts",
-  "line": 42,
-  "column": 15
-}
-```
-Returns: Hover tooltip info (types, docs, etc.)
-
-### 12. Code Actions
-```json
-{
-  "type": "codeActions",
-  "path": "/path/to/file.ts",
-  "startLine": 10,
-  "endLine": 20
-}
-```
-Returns: Available refactorings, quick fixes
-
-### 13. Implementations
+### 6. Find Implementations
 ```json
 {
   "type": "implementations",
-  "symbol": "interfaceName",
-  "path": "/path/to/file.ts",
-  "line": 5
+  "symbol": "UserInterface",    // interface/abstract class name
+  "path": "/path/to/file.ts"    // optional - search in specific file or workspace
 }
 ```
-Returns: All implementations of an interface/abstract class
+Returns: All implementations of this interface/abstract class
 
-### 14. File Dependencies
+### 7. Get Type Info (replaces hover)
 ```json
 {
-  "type": "dependencies",
-  "path": "/path/to/file.ts",
-  "direction": "imports"  // or "importedBy"
+  "type": "typeInfo",
+  "symbol": "processUser",      // symbol name
+  "path": "/path/to/file.ts"    // optional - specific file or workspace
 }
 ```
-Returns: What this file imports or what imports this file
+Returns: Type signature and documentation for the symbol
+
+### 8. Get Completions (questionable value)
+```json
+{
+  "type": "completions",
+  "prefix": "user.",            // what comes before the completion point
+  "path": "/path/to/file.ts",
+  "context": "const result = user." // optional surrounding code
+}
+```
+Returns: Available methods/properties after the prefix
 
 ## Response Format
 
@@ -173,21 +107,71 @@ Error case:
 
 ## Example Responses
 
-### Symbol Info Response
+### Find Symbols Response
 ```json
 {
   "success": true,
   "data": {
-    "name": "processUser",
-    "kind": "function",
-    "type": "(user: User) => Promise<ProcessedUser>",
-    "documentation": "Processes user data and returns enhanced user object",
-    "references": 12,
-    "location": {
-      "path": "/src/utils/user.ts",
-      "line": 45,
-      "column": 8
-    }
+    "symbols": [
+      {
+        "name": "handleOpen",
+        "kind": "function",
+        "path": "/src/handler.ts",
+        "line": 45,
+        "containerName": "OpenHandler"
+      },
+      {
+        "name": "handleClose", 
+        "kind": "method",
+        "path": "/src/handler.ts",
+        "line": 67,
+        "containerName": "CloseHandler"
+      }
+    ]
+  }
+}
+```
+
+### File Outline Response
+```json
+{
+  "success": true,
+  "data": {
+    "symbols": [
+      {
+        "name": "UserInterface",
+        "kind": "interface",
+        "line": 5,
+        "children": [
+          {"name": "id", "kind": "property", "line": 6},
+          {"name": "name", "kind": "property", "line": 7}
+        ]
+      },
+      {
+        "name": "processUser",
+        "kind": "function", 
+        "line": 15
+      }
+    ]
+  }
+}
+```
+
+### Diagnostics Response
+```json
+{
+  "success": true,
+  "data": {
+    "diagnostics": [
+      {
+        "path": "/src/index.ts",
+        "line": 10,
+        "column": 5,
+        "severity": "error",
+        "message": "Cannot find name 'nonExistentVar'",
+        "source": "ts"
+      }
+    ]
   }
 }
 ```
@@ -215,30 +199,21 @@ Error case:
 }
 ```
 
-### Diagnostics Response
-```json
-{
-  "success": true,
-  "data": {
-    "diagnostics": [
-      {
-        "path": "/src/index.ts",
-        "line": 10,
-        "column": 5,
-        "severity": "error",
-        "message": "Cannot find name 'nonExistentVar'",
-        "source": "ts"
-      }
-    ]
-  }
-}
-```
-
 ## Implementation Notes
 
-1. **Go MCP Server**: Just passes the entire query object through as JSON - no need to parse individual query types
-2. **Extension**: Does all the heavy lifting using VS Code APIs
-3. **Smart Symbol Resolution**: When line/column not provided, extension searches for symbol in file
-4. **Language Server Protocol**: Most code intelligence comes from LSP
-5. **Graceful Degradation**: Not all features available for all languages
-6. **Performance**: Some queries might be slow (e.g., finding all references) - handle timeouts
+1. **Critical Question**: Can VS Code's language features work on unopened files? This determines if the tool provides value over grep/ripgrep.
+2. **Symbol-based queries**: Most queries now use symbol names instead of line/column positions, making them more practical for Claude to use
+3. **Symbol resolution**: The extension needs to search for symbols by name when line/column not provided
+4. **Go MCP Server**: Just passes the entire query object through as JSON - no parsing needed
+5. **Extension**: Uses VS Code APIs (`vscode.languages.*`, `vscode.workspace.*`)
+6. **Language Server Protocol**: Most intelligence comes from LSP
+7. **Graceful Degradation**: Not all features available for all languages
+8. **Performance**: Some queries might be slow - handle timeouts appropriately
+
+## Why These Queries Help Claude
+
+- **Find Symbols**: Better than grep because it understands code structure (e.g., distinguishes between `handleOpen` function vs `handleOpen` string)
+- **File Outline**: Quickly understand what's in a file without reading all of it
+- **Diagnostics**: See errors without running build commands
+- **References**: Understand impact before making changes (e.g., "where is this function used?")
+- **Type Info**: Get type signatures without finding and reading type definitions

@@ -8,227 +8,227 @@ import * as vscode from 'vscode';
 const execAsync = promisify(exec);
 
 export class SetupManager {
-    constructor(
-        private outputChannel: vscode.OutputChannel,
-        private context: vscode.ExtensionContext
-    ) {}
+	constructor(
+		private outputChannel: vscode.OutputChannel,
+		private context: vscode.ExtensionContext
+	) {}
 
-    async checkAndInstallMCP(): Promise<void> {
-        this.outputChannel.appendLine('=== Checking VS Claude MCP installation ===');
+	async checkAndInstallMCP(): Promise<void> {
+		this.outputChannel.appendLine('=== Checking VS Claude MCP installation ===');
 
-        const mcpServerPath = this.getMCPServerPath();
-        if (!mcpServerPath) return;
+		const mcpServerPath = this.getMCPServerPath();
+		if (!mcpServerPath) return;
 
-        if (!fs.existsSync(mcpServerPath)) {
-            this.outputChannel.appendLine(`ERROR: MCP server binary not found at ${mcpServerPath}`);
-            vscode.window.showErrorMessage('VS Claude MCP server binary not found. Please rebuild the extension.');
-            return;
-        }
+		if (!fs.existsSync(mcpServerPath)) {
+			this.outputChannel.appendLine(`ERROR: MCP server binary not found at ${mcpServerPath}`);
+			vscode.window.showErrorMessage('VS Claude MCP server binary not found. Please rebuild the extension.');
+			return;
+		}
 
-        const installedPath = await this.checkInstallation();
+		const installedPath = await this.checkInstallation();
 
-        if (installedPath) {
-            this.outputChannel.appendLine(`VS Claude MCP server found at: ${installedPath}`);
+		if (installedPath) {
+			this.outputChannel.appendLine(`VS Claude MCP server found at: ${installedPath}`);
 
-            if (installedPath === mcpServerPath) {
-                this.outputChannel.appendLine('VS Claude MCP server is correctly installed');
-                return;
-            } else {
-                this.outputChannel.appendLine(`Path mismatch! Expected: ${mcpServerPath}, Found: ${installedPath}`);
+			if (installedPath === mcpServerPath) {
+				this.outputChannel.appendLine('VS Claude MCP server is correctly installed');
+				return;
+			} else {
+				this.outputChannel.appendLine(`Path mismatch! Expected: ${mcpServerPath}, Found: ${installedPath}`);
 
-                const result = await vscode.window.showWarningMessage(
-                    'VS Claude MCP server is installed at an unexpected location',
-                    {
-                        modal: false,
-                        detail: `Found at: ${installedPath}\nExpected at: ${mcpServerPath}\n\nWould you like to remove the old installation and install the correct one?`,
-                    },
-                    'Update',
-                    'Keep Current',
-                    'Manual Setup'
-                );
+				const result = await vscode.window.showWarningMessage(
+					'VS Claude MCP server is installed at an unexpected location',
+					{
+						modal: false,
+						detail: `Found at: ${installedPath}\nExpected at: ${mcpServerPath}\n\nWould you like to remove the old installation and install the correct one?`,
+					},
+					'Update',
+					'Keep Current',
+					'Manual Setup'
+				);
 
-                if (result === 'Update') {
-                    this.outputChannel.appendLine('Removing old VS Claude installation...');
-                    try {
-                        await execAsync('claude mcp remove -s user vs-claude');
-                        this.outputChannel.appendLine('Old installation removed');
-                        await this.installMCP(mcpServerPath);
-                    } catch (error) {
-                        this.outputChannel.appendLine(`Failed to remove old installation: ${error}`);
-                        vscode.window.showErrorMessage(
-                            'Failed to update VS Claude. Check the output panel for details.'
-                        );
-                    }
-                } else if (result === 'Manual Setup') {
-                    await this.showManualInstructions(mcpServerPath);
-                }
-                return;
-            }
-        }
+				if (result === 'Update') {
+					this.outputChannel.appendLine('Removing old VS Claude installation...');
+					try {
+						await execAsync('claude mcp remove -s user vs-claude');
+						this.outputChannel.appendLine('Old installation removed');
+						await this.installMCP(mcpServerPath);
+					} catch (error) {
+						this.outputChannel.appendLine(`Failed to remove old installation: ${error}`);
+						vscode.window.showErrorMessage(
+							'Failed to update VS Claude. Check the output panel for details.'
+						);
+					}
+				} else if (result === 'Manual Setup') {
+					await this.showManualInstructions(mcpServerPath);
+				}
+				return;
+			}
+		}
 
-        this.outputChannel.appendLine('Showing installation prompt...');
-        const result = await vscode.window.showInformationMessage(
-            'VS Claude MCP not configured',
-            {
-                modal: false,
-                detail: 'Would you like to install the VS Claude MCP server to enable Claude integration?',
-            },
-            'Install',
-            'Manual Setup'
-        );
-        this.outputChannel.appendLine(`User selected: ${result}`);
+		this.outputChannel.appendLine('Showing installation prompt...');
+		const result = await vscode.window.showInformationMessage(
+			'VS Claude MCP not configured',
+			{
+				modal: false,
+				detail: 'Would you like to install the VS Claude MCP server to enable Claude integration?',
+			},
+			'Install',
+			'Manual Setup'
+		);
+		this.outputChannel.appendLine(`User selected: ${result}`);
 
-        if (result === 'Install') {
-            await this.installMCP(mcpServerPath);
-        } else if (result === 'Manual Setup') {
-            await this.showManualInstructions(mcpServerPath);
-        }
-    }
+		if (result === 'Install') {
+			await this.installMCP(mcpServerPath);
+		} else if (result === 'Manual Setup') {
+			await this.showManualInstructions(mcpServerPath);
+		}
+	}
 
-    async uninstallMCP(): Promise<void> {
-        const installedPath = await this.checkInstallation();
-        if (!installedPath) {
-            this.outputChannel.appendLine('VS Claude MCP server is not installed.');
-            return;
-        }
+	async uninstallMCP(): Promise<void> {
+		const installedPath = await this.checkInstallation();
+		if (!installedPath) {
+			this.outputChannel.appendLine('VS Claude MCP server is not installed.');
+			return;
+		}
 
-        const confirm = await vscode.window.showWarningMessage(
-            'Are you sure you want to uninstall VS Claude MCP server?',
-            'Uninstall',
-            'Cancel'
-        );
+		const confirm = await vscode.window.showWarningMessage(
+			'Are you sure you want to uninstall VS Claude MCP server?',
+			'Uninstall',
+			'Cancel'
+		);
 
-        if (confirm !== 'Uninstall') {
-            return;
-        }
+		if (confirm !== 'Uninstall') {
+			return;
+		}
 
-        try {
-            this.outputChannel.appendLine('Uninstalling VS Claude MCP server...');
-            this.outputChannel.appendLine('Command: claude mcp remove -s user vs-claude');
+		try {
+			this.outputChannel.appendLine('Uninstalling VS Claude MCP server...');
+			this.outputChannel.appendLine('Command: claude mcp remove -s user vs-claude');
 
-            const { stdout, stderr } = await execAsync('claude mcp remove -s user vs-claude');
+			const { stdout, stderr } = await execAsync('claude mcp remove -s user vs-claude');
 
-            if (stdout) this.outputChannel.appendLine(`Output: ${stdout}`);
-            if (stderr) this.outputChannel.appendLine(`Error: ${stderr}`);
+			if (stdout) this.outputChannel.appendLine(`Output: ${stdout}`);
+			if (stderr) this.outputChannel.appendLine(`Error: ${stderr}`);
 
-            vscode.window.showInformationMessage('VS Claude has been uninstalled!', {
-                modal: false,
-                detail: 'You may need to restart Claude for changes to take effect.',
-            });
-        } catch (error) {
-            this.outputChannel.appendLine(`Failed to uninstall MCP server: ${error}`);
-            vscode.window.showErrorMessage('Failed to uninstall VS Claude. Check the output panel for details.');
-        }
-    }
+			vscode.window.showInformationMessage('VS Claude has been uninstalled!', {
+				modal: false,
+				detail: 'You may need to restart Claude for changes to take effect.',
+			});
+		} catch (error) {
+			this.outputChannel.appendLine(`Failed to uninstall MCP server: ${error}`);
+			vscode.window.showErrorMessage('Failed to uninstall VS Claude. Check the output panel for details.');
+		}
+	}
 
-    private async checkInstallation(): Promise<string | null> {
-        try {
-            this.outputChannel.appendLine('Running: claude mcp list');
-            const { stdout, stderr } = await execAsync('claude mcp list');
-            this.outputChannel.appendLine(`MCP list output: ${stdout}`);
-            if (stderr) this.outputChannel.appendLine(`MCP list stderr: ${stderr}`);
+	private async checkInstallation(): Promise<string | null> {
+		try {
+			this.outputChannel.appendLine('Running: claude mcp list');
+			const { stdout, stderr } = await execAsync('claude mcp list');
+			this.outputChannel.appendLine(`MCP list output: ${stdout}`);
+			if (stderr) this.outputChannel.appendLine(`MCP list stderr: ${stderr}`);
 
-            // Check if vs-claude is actually in the list and extract its path
-            // The output format is: "name: path" on each line
-            const lines = stdout.split('\n');
-            for (const line of lines) {
-                const trimmedLine = line.trim();
-                if (trimmedLine.startsWith('vs-claude:')) {
-                    // Extract the path after "vs-claude: "
-                    const path = trimmedLine.substring('vs-claude:'.length).trim();
-                    return path;
-                }
-            }
-            return null;
-        } catch (error) {
-            this.outputChannel.appendLine(`Error checking MCP list: ${error}`);
-            this.outputChannel.appendLine('Claude CLI might not be installed or not in PATH');
-            return null;
-        }
-    }
+			// Check if vs-claude is actually in the list and extract its path
+			// The output format is: "name: path" on each line
+			const lines = stdout.split('\n');
+			for (const line of lines) {
+				const trimmedLine = line.trim();
+				if (trimmedLine.startsWith('vs-claude:')) {
+					// Extract the path after "vs-claude: "
+					const path = trimmedLine.substring('vs-claude:'.length).trim();
+					return path;
+				}
+			}
+			return null;
+		} catch (error) {
+			this.outputChannel.appendLine(`Error checking MCP list: ${error}`);
+			this.outputChannel.appendLine('Claude CLI might not be installed or not in PATH');
+			return null;
+		}
+	}
 
-    private getMCPServerPath(): string | null {
-        const platform = os.platform();
-        const arch = os.arch();
-        let binaryName = 'mcp-server-';
+	private getMCPServerPath(): string | null {
+		const platform = os.platform();
+		const arch = os.arch();
+		let binaryName = 'mcp-server-';
 
-        this.outputChannel.appendLine(`Platform: ${platform}, Architecture: ${arch}`);
+		this.outputChannel.appendLine(`Platform: ${platform}, Architecture: ${arch}`);
 
-        if (platform === 'darwin') {
-            binaryName += arch === 'arm64' ? 'darwin-arm64' : 'darwin-amd64';
-        } else if (platform === 'linux') {
-            binaryName += 'linux-amd64';
-        } else if (platform === 'win32') {
-            binaryName += 'windows-amd64.exe';
-        } else {
-            vscode.window.showErrorMessage(`Unsupported platform: ${platform}`);
-            return null;
-        }
+		if (platform === 'darwin') {
+			binaryName += arch === 'arm64' ? 'darwin-arm64' : 'darwin-amd64';
+		} else if (platform === 'linux') {
+			binaryName += 'linux-amd64';
+		} else if (platform === 'win32') {
+			binaryName += 'windows-amd64.exe';
+		} else {
+			vscode.window.showErrorMessage(`Unsupported platform: ${platform}`);
+			return null;
+		}
 
-        const mcpServerPath = path.join(this.context.extensionPath, 'bin', binaryName);
-        this.outputChannel.appendLine(`MCP server path: ${mcpServerPath}`);
-        return mcpServerPath;
-    }
+		const mcpServerPath = path.join(this.context.extensionPath, 'bin', binaryName);
+		this.outputChannel.appendLine(`MCP server path: ${mcpServerPath}`);
+		return mcpServerPath;
+	}
 
-    private async installMCP(mcpServerPath: string): Promise<void> {
-        try {
-            this.outputChannel.appendLine(`Installing VS Claude MCP server...`);
-            this.outputChannel.appendLine(`Command: claude mcp add -s user vs-claude "${mcpServerPath}"`);
+	private async installMCP(mcpServerPath: string): Promise<void> {
+		try {
+			this.outputChannel.appendLine(`Installing VS Claude MCP server...`);
+			this.outputChannel.appendLine(`Command: claude mcp add -s user vs-claude "${mcpServerPath}"`);
 
-            const { stdout, stderr } = await execAsync(`claude mcp add -s user vs-claude "${mcpServerPath}"`);
+			const { stdout, stderr } = await execAsync(`claude mcp add -s user vs-claude "${mcpServerPath}"`);
 
-            if (stdout) this.outputChannel.appendLine(`Output: ${stdout}`);
-            if (stderr) this.outputChannel.appendLine(`Error: ${stderr}`);
+			if (stdout) this.outputChannel.appendLine(`Output: ${stdout}`);
+			if (stderr) this.outputChannel.appendLine(`Error: ${stderr}`);
 
-            vscode.window.showInformationMessage('VS Claude has been installed!', {
-                modal: false,
-                detail: 'You may need to restart Claude for changes to take effect.',
-            });
-        } catch (error) {
-            this.outputChannel.appendLine(`Failed to install MCP server: ${error}`);
-            vscode.window.showErrorMessage('Failed to install VS Claude. Check the output panel for details.');
-        }
-    }
+			vscode.window.showInformationMessage('VS Claude has been installed!', {
+				modal: false,
+				detail: 'You may need to restart Claude for changes to take effect.',
+			});
+		} catch (error) {
+			this.outputChannel.appendLine(`Failed to install MCP server: ${error}`);
+			vscode.window.showErrorMessage('Failed to install VS Claude. Check the output panel for details.');
+		}
+	}
 
-    private async showManualInstructions(mcpServerPath: string): Promise<void> {
-        const panel = vscode.window.createWebviewPanel(
-            'vsClaudeSetup',
-            'Install VS Claude MCP',
-            vscode.ViewColumn.One,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true,
-                localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, '')],
-            }
-        );
+	private async showManualInstructions(mcpServerPath: string): Promise<void> {
+		const panel = vscode.window.createWebviewPanel(
+			'vsClaudeSetup',
+			'Install VS Claude MCP',
+			vscode.ViewColumn.One,
+			{
+				enableScripts: true,
+				retainContextWhenHidden: true,
+				localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, '')],
+			}
+		);
 
-        const escapedPath = mcpServerPath.replace(/\\/g, '\\\\');
-        const command = `claude mcp add -s user vs-claude "${mcpServerPath}"`;
+		const escapedPath = mcpServerPath.replace(/\\/g, '\\\\');
+		const command = `claude mcp add -s user vs-claude "${mcpServerPath}"`;
 
-        const logoUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'logo.png'));
+		const logoUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'logo.png'));
 
-        panel.webview.html = this.getWebviewContent(command, escapedPath, mcpServerPath, logoUri);
+		panel.webview.html = this.getWebviewContent(command, escapedPath, mcpServerPath, logoUri);
 
-        panel.webview.onDidReceiveMessage(
-            async (message) => {
-                switch (message.type) {
-                    case 'copy':
-                        await vscode.env.clipboard.writeText(message.text);
-                        break;
-                }
-            },
-            undefined,
-            []
-        );
-    }
+		panel.webview.onDidReceiveMessage(
+			async (message) => {
+				switch (message.type) {
+					case 'copy':
+						await vscode.env.clipboard.writeText(message.text);
+						break;
+				}
+			},
+			undefined,
+			[]
+		);
+	}
 
-    private getWebviewContent(
-        command: string,
-        escapedPath: string,
-        mcpServerPath: string,
-        logoUri: vscode.Uri
-    ): string {
-        return `<!DOCTYPE html>
+	private getWebviewContent(
+		command: string,
+		escapedPath: string,
+		mcpServerPath: string,
+		logoUri: vscode.Uri
+	): string {
+		return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -499,5 +499,5 @@ export class SetupManager {
     </script>
 </body>
 </html>`;
-    }
+	}
 }

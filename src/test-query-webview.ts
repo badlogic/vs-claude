@@ -209,12 +209,6 @@ export class TestQueryWebviewProvider {
                     or use "type" for all type-like symbols (class,interface,struct,enum)
                 </small>
             </div>
-            <div class="input-group">
-                <label for="findSymbols-exact">
-                    <input type="checkbox" id="findSymbols-exact" />
-                    Exact match (default is contains match)
-                </label>
-            </div>
             <button onclick="runFindSymbols()">Run Find Symbols</button>
             <button onclick="clearResult('findSymbols')">Clear</button>
             <div id="findSymbols-result" class="result"></div>
@@ -317,7 +311,6 @@ export class TestQueryWebviewProvider {
             const query = document.getElementById('findSymbols-query').value;
             const path = document.getElementById('findSymbols-path').value;
             const kind = document.getElementById('findSymbols-kind').value;
-            const exact = document.getElementById('findSymbols-exact').checked;
 
             const request = {
                 type: 'findSymbols',
@@ -329,9 +322,6 @@ export class TestQueryWebviewProvider {
             }
             if (kind) {
                 request.kind = kind;
-            }
-            if (exact) {
-                request.exact = true;
             }
 
             runQuery(request, 'findSymbols');

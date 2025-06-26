@@ -128,20 +128,19 @@ Query types (with required parameters marked):
 1. Find Symbols - Search for symbols across the entire workspace
    USE THIS to find where symbols are defined in the codebase!
    
-   Parameters: query (required), path?, kind?, exact?
+   Parameters: query (required), path?, kind?
    - query: Symbol name with glob patterns (*, ?, [abc], {a,b}, **)
    - kind: Filter by symbol type (e.g., "class", "method", "interface")
    - path: Limit results to a specific file
-   - exact: Use exact matching instead of pattern matching
    
-   {"type": "findSymbols", "query": "Animation"}  // find symbols containing "Animation"
+   {"type": "findSymbols", "query": "Animation"}  // find symbols named exactly "Animation"
    {"type": "findSymbols", "query": "*", "kind": "class"}  // find ALL classes in workspace
    {"type": "findSymbols", "query": "get*", "kind": "method"}  // methods starting with "get"
    {"type": "findSymbols", "query": "*Test", "kind": "class"}  // classes ending with "Test"
    {"type": "findSymbols", "query": "[A-Z]*Service"}  // services starting with uppercase
    {"type": "findSymbols", "query": "{get,set}*"}  // getters and setters
    {"type": "findSymbols", "query": "process?", "path": "/path/to/file.ts"}  // process + 1 char
-   {"type": "findSymbols", "query": "Skeleton", "exact": true}  // exact match only
+   {"type": "findSymbols", "query": "Animation*"}  // Animation, AnimationController, etc.
 
 2. Get File Outline - Understand file/class structure, see methods/fields/properties
    USE THIS to explore a file's API and structure!

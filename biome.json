@@ -25,7 +25,7 @@
   "formatter": {
     "enabled": true,
     "formatWithErrors": false,
-    "indentStyle": "space",
+    "indentStyle": "tab",
     "indentWidth": 4,
     "lineWidth": 120,
     "lineEnding": "lf"

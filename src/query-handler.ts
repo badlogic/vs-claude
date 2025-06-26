@@ -7,7 +7,6 @@ interface FindSymbolsRequest {
 	query: string;
 	path?: string; // Optional: filter results to this file only
 	kind?: string;
-	exact?: boolean;
 }
 
 interface OutlineRequest {
@@ -128,12 +127,7 @@ export class QueryHandler {
 			}
 
 			// Filter results
-			let filteredSymbols = await this.filterSymbols(
-				workspaceSymbols,
-				request.query,
-				request.exact,
-				request.kind
-			);
+			let filteredSymbols = await this.filterSymbols(workspaceSymbols, request.query, request.kind);
 
 			// If path is specified, filter to only that file
 			if (request.path) {
@@ -177,7 +171,6 @@ export class QueryHandler {
 				symbolData = this.filterOutlineSymbols(
 					documentSymbols,
 					request.symbol || '*', // If no symbol specified, match all
-					false, // Always use pattern matching for outline
 					request.kind
 				);
 
@@ -286,14 +279,8 @@ export class QueryHandler {
 		return `${startLine}:${startCol}-${endLine}:${endCol}`;
 	}
 
-	private nameAndKindMatches(
-		name: string,
-		kind: vscode.SymbolKind,
-		query: string,
-		exact?: boolean,
-		kindFilter?: string
-	): boolean {
-		const matches = exact ? name === query : this.matchesQuery(name, query);
+	private nameAndKindMatches(name: string, kind: vscode.SymbolKind, query: string, kindFilter?: string): boolean {
+		const matches = this.matchesQuery(name, query);
 		const matchesKind = !kindFilter || this.parseSymbolKinds(kindFilter).includes(kind);
 		return matches && matchesKind;
 	}
@@ -301,13 +288,12 @@ export class QueryHandler {
 	private async filterSymbols(
 		symbols: vscode.SymbolInformation[],
 		query: string,
-		exact?: boolean,
 		kindFilter?: string
 	): Promise<Symbol[]> {
 		const result: Symbol[] = [];
 
 		for (const symbol of symbols) {
-			if (this.nameAndKindMatches(symbol.name, symbol.kind, query, exact, kindFilter)) {
+			if (this.nameAndKindMatches(symbol.name, symbol.kind, query, kindFilter)) {
 				result.push(await this.convertSymbolInformation(symbol));
 			}
 		}
@@ -355,7 +341,6 @@ export class QueryHandler {
 	private filterOutlineSymbols(
 		symbols: vscode.DocumentSymbol[],
 		query: string,
-		exact?: boolean,
 		kindFilter?: string,
 		parentPath: string = ''
 	): OutlineSymbol[] {
@@ -366,7 +351,7 @@ export class QueryHandler {
 			const fullPath = parentPath ? `${parentPath}.${symbol.name}` : symbol.name;
 
 			// Check if this symbol matches our criteria using the full path
-			const symbolMatches = this.nameAndKindMatches(fullPath, symbol.kind, query, exact, kindFilter);
+			const symbolMatches = this.nameAndKindMatches(fullPath, symbol.kind, query, kindFilter);
 
 			if (symbolMatches) {
 				// Symbol matches: include it with ALL its children (unfiltered)
@@ -375,7 +360,7 @@ export class QueryHandler {
 			} else if (symbol.children && symbol.children.length > 0) {
 				// Symbol doesn't match: check if any descendants match
 				// Pass the current full path as parent path for children
-				const filteredChildren = this.filterOutlineSymbols(symbol.children, query, exact, kindFilter, fullPath);
+				const filteredChildren = this.filterOutlineSymbols(symbol.children, query, kindFilter, fullPath);
 
 				if (filteredChildren.length > 0) {
 					// Has matching descendants: include this symbol as context with only the filtered children
