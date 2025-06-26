@@ -202,31 +202,34 @@ export class TestToolWebviewProvider {
         .multi-select {
             display: flex;
             flex-wrap: wrap;
-            gap: 6px;
+            gap: 4px;
             margin-top: 8px;
         }
 
-        .kind-checkbox {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            padding: 4px 8px;
+        .kind-toggle {
+            padding: 3px 10px;
             background: var(--vscode-button-secondaryBackground);
             border: 1px solid var(--vscode-button-border);
             border-radius: 3px;
             cursor: pointer;
             font-size: 11px;
-            transition: background-color 0.2s;
+            transition: all 0.2s;
+            user-select: none;
         }
 
-        .kind-checkbox:hover {
+        .kind-toggle:hover {
             background: var(--vscode-button-secondaryHoverBackground);
         }
 
-        .kind-checkbox input {
-            width: 14px;
-            height: 14px;
-            margin: 0;
+        .kind-toggle.selected {
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border-color: var(--vscode-button-background);
+        }
+
+        .kind-toggle.selected:hover {
+            background: var(--vscode-button-hoverBackground);
+            border-color: var(--vscode-button-hoverBackground);
         }
 
         .button-group {
@@ -496,26 +499,21 @@ export class TestToolWebviewProvider {
                 
                 <div class="field-group">
                     <label>Symbol Kinds (optional)</label>
-                    <div class="multi-select">
-                        <label class="kind-checkbox"><input type="checkbox" value="class"> Class</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="interface"> Interface</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="struct"> Struct</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="enum"> Enum</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="method"> Method</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="function"> Function</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="constructor"> Constructor</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="property"> Property</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="field"> Field</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="variable"> Variable</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="constant"> Constant</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="module"> Module</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="namespace"> Namespace</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="package"> Package</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="enummember"> Enum Member</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="string"> String</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="null"> Null</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="operator"> Operator</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="type"> Type</label>
+                    <div class="multi-select" id="symbols-kinds">
+                        <div class="kind-toggle" data-kind="class">Class</div>
+                        <div class="kind-toggle" data-kind="interface">Interface</div>
+                        <div class="kind-toggle" data-kind="struct">Struct</div>
+                        <div class="kind-toggle" data-kind="enum">Enum</div>
+                        <div class="kind-toggle" data-kind="method">Method</div>
+                        <div class="kind-toggle" data-kind="function">Function</div>
+                        <div class="kind-toggle" data-kind="constructor">Constructor</div>
+                        <div class="kind-toggle" data-kind="property">Property</div>
+                        <div class="kind-toggle" data-kind="field">Field</div>
+                        <div class="kind-toggle" data-kind="variable">Variable</div>
+                        <div class="kind-toggle" data-kind="constant">Constant</div>
+                        <div class="kind-toggle" data-kind="enummember">Enum Member</div>
+                        <div class="kind-toggle" data-kind="operator">Operator</div>
+                        <div class="kind-toggle" data-kind="type">Type</div>
                     </div>
                 </div>
                 
@@ -668,12 +666,7 @@ export class TestToolWebviewProvider {
                         <option value="field">Fields</option>
                         <option value="variable">Variables</option>
                         <option value="constant">Constants</option>
-                        <option value="module">Modules</option>
-                        <option value="namespace">Namespaces</option>
-                        <option value="package">Packages</option>
                         <option value="enummember">Enum Members</option>
-                        <option value="string">Strings</option>
-                        <option value="null">Nulls</option>
                         <option value="operator">Operators</option>
                         <option value="type">Types</option>
                     </select>
@@ -878,8 +871,8 @@ export class TestToolWebviewProvider {
             const countOnly = document.getElementById('symbols-countOnly').checked;
             
             const kinds = [];
-            document.querySelectorAll('.kind-checkbox input:checked').forEach(cb => {
-                kinds.push(cb.value);
+            document.querySelectorAll('.kind-toggle.selected').forEach(toggle => {
+                kinds.push(toggle.dataset.kind);
             });
             
             const request = { type: 'symbols', query };
@@ -976,7 +969,7 @@ export class TestToolWebviewProvider {
             document.getElementById('symbols-path').value = '';
             document.getElementById('symbols-exclude').value = '';
             document.getElementById('symbols-countOnly').checked = false;
-            document.querySelectorAll('.kind-checkbox input').forEach(cb => cb.checked = false);
+            document.querySelectorAll('.kind-toggle').forEach(toggle => toggle.classList.remove('selected'));
             document.getElementById('symbols-result').classList.remove('visible');
         }
 
@@ -1070,6 +1063,13 @@ export class TestToolWebviewProvider {
                 setTimeout(() => {
                     e.target.style.textDecoration = '';
                 }, 200);
+            }
+        });
+
+        // Handle kind toggle clicks
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('kind-toggle')) {
+                e.target.classList.toggle('selected');
             }
         });
 

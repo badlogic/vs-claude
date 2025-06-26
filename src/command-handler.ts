@@ -27,7 +27,7 @@ export class CommandHandler {
 	async executeCommand(command: Command): Promise<{ success: boolean; data?: unknown; error?: string }> {
 		// Log the incoming command
 		logger.info('CommandHandler', `Received command: ${command.tool}`);
-		logger.debug('CommandHandler', 'Command args:', command.args);
+		logger.info('CommandHandler', 'Raw JSON input:', command);
 
 		try {
 			let result: { success: boolean; data?: unknown; error?: string };
@@ -60,18 +60,19 @@ export class CommandHandler {
 
 			if (result.success) {
 				logger.info('CommandHandler', `Command ${command.tool} completed successfully`);
-				if (result.data) {
-					logger.debug('CommandHandler', 'Result data:', result.data);
-				}
+				logger.info('CommandHandler', 'Raw JSON output:', result);
 			} else {
 				logger.error('CommandHandler', `Command ${command.tool} failed: ${result.error}`);
+				logger.info('CommandHandler', 'Raw JSON output:', result);
 			}
 
 			return result;
 		} catch (error) {
 			const errorMessage = `Command execution error: ${error}`;
 			logger.error('CommandHandler', errorMessage);
-			return { success: false, error: String(error) };
+			const result = { success: false, error: String(error) };
+			logger.info('CommandHandler', 'Raw JSON output:', result);
+			return result;
 		}
 	}
 }
