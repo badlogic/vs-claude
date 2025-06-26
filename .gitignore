@@ -6,6 +6,7 @@ node_modules/
 out/
 bin/
 *.vsix
+build/
 
 # VS Code
 .vscode/*
@@ -51,4 +52,3 @@ coverage/
 
 # VS Claude runtime files
 .vs-claude/
-build/mcp

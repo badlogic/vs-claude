@@ -15,8 +15,9 @@ suite('Query Tool E2E Tests', function () {
 	});
 
 	test('Should find symbols by name', async () => {
-		// Give language servers time to index the test workspace
-		await new Promise((resolve) => setTimeout(resolve, 3000));
+		// Give language servers time to initialize and index the test workspace
+		console.log('Waiting for language servers to initialize...');
+		await new Promise((resolve) => setTimeout(resolve, 5000));
 
 		const result = await mcpClient.callTool('query', {
 			args: {

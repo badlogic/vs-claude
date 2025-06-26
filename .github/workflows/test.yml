@@ -1,0 +1,223 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        type: boolean
+        description: 'Enable debug logging'
+        required: false
+        default: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+        cache: true
+    
+    # Install system dependencies for language servers
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          python3-dev \
+          python3-pip \
+          default-jdk \
+          libx11-dev \
+          libxkbfile-dev \
+          libsecret-1-dev \
+          libnss3 \
+          libgtk-3-0 \
+          libgbm1 \
+          xvfb
+    
+    # Install language-specific tools (for better language server support)
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+    
+    - name: Install npm dependencies
+      run: npm ci
+    
+    - name: Run linter and formatter
+      run: npm run check
+    
+    - name: Build extension
+      run: npm run build
+    
+    # Run tests with xvfb to provide a display for VS Code
+    - name: Run tests
+      run: xvfb-run -a npm test
+      env:
+        DISPLAY: ':99.0'
+      timeout-minutes: 10
+    
+    # Upload test results if tests fail
+    - name: Upload test logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-logs-${{ matrix.node-version }}
+        path: |
+          out/test/**/*.log
+          .vscode-test/logs/
+        retention-days: 7
+
+  test-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+    
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+        cache: true
+    
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+    
+    - name: Install npm dependencies
+      run: npm ci
+    
+    - name: Run linter and formatter
+      run: npm run check
+    
+    - name: Build extension
+      run: npm run build
+    
+    - name: Run tests
+      run: npm test
+      timeout-minutes: 10
+    
+    - name: Upload test logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-logs-macos
+        path: |
+          out/test/**/*.log
+          .vscode-test/logs/
+        retention-days: 7
+
+  test-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+    
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+        cache: true
+    
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+    
+    - name: Install npm dependencies
+      run: npm ci
+    
+    - name: Run linter and formatter
+      run: npm run check
+    
+    - name: Build extension
+      run: npm run build
+    
+    - name: Run tests
+      run: npm test
+      timeout-minutes: 15
+    
+    - name: Upload test logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-logs-windows
+        path: |
+          out/test/**/*.log
+          .vscode-test/logs/
+        retention-days: 7
