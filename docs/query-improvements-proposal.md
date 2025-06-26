@@ -231,3 +231,20 @@ Given that Claude (Cline) can handle streaming responses, pagination might not b
 1. Interactive exploration tools
 2. Very large monorepos
 3. Clients with strict response size limits
+
+## Other Future Improvements
+
+### Configurable Timeout
+Currently, all queries timeout after 15 seconds. This could be made configurable:
+
+```typescript
+interface QueryRequest {
+  // ... existing fields ...
+  timeout?: number; // Optional timeout in milliseconds (default: 15000)
+}
+```
+
+This would allow:
+- Longer timeouts for complex workspace searches
+- Shorter timeouts for quick file queries
+- Per-query customization based on expected complexity

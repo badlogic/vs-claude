@@ -45,50 +45,76 @@ export class OpenHandler {
 		this.outputChannel.appendLine(`Executing open command`);
 		this.outputChannel.appendLine(`Open args: ${JSON.stringify(args, null, 2)}`);
 
-		try {
-			// Normalize to array of items
-			let items: OpenItem[];
+		// Normalize to array of items
+		let items: OpenItem[];
 
-			if (Array.isArray(args)) {
-				// Array of items
-				items = args;
+		if (Array.isArray(args)) {
+			// Array of items
+			items = args;
+		} else {
+			// Single item
+			items = [args];
+		}
+
+		// Track successes and failures
+		let successCount = 0;
+		const failedItems: Array<{ item: OpenItem; error: string }> = [];
+
+		// Group file items by path to handle multiple highlights
+		const fileGroups = new Map<string, OpenFileItem[]>();
+		const otherItems: OpenItem[] = [];
+
+		for (const item of items) {
+			if (item.type === 'file') {
+				const existing = fileGroups.get(item.path) || [];
+				existing.push(item);
+				fileGroups.set(item.path, existing);
 			} else {
-				// Single item
-				items = [args];
+				otherItems.push(item);
 			}
+		}
 
-			// Group file items by path to handle multiple highlights
-			const fileGroups = new Map<string, OpenFileItem[]>();
-			const otherItems: OpenItem[] = [];
-
-			for (const item of items) {
-				if (item.type === 'file') {
-					const existing = fileGroups.get(item.path) || [];
-					existing.push(item);
-					fileGroups.set(item.path, existing);
-				} else {
-					otherItems.push(item);
+		// Process grouped file items
+		for (const [path, fileItems] of fileGroups) {
+			try {
+				await this.openFileWithMultipleSelections(fileItems);
+				successCount += fileItems.length;
+			} catch (error) {
+				const errorMsg = this.formatFileError(path, error);
+				this.outputChannel.appendLine(`Failed to open file ${path}: ${errorMsg}`);
+				for (const item of fileItems) {
+					failedItems.push({ item, error: errorMsg });
 				}
 			}
+		}
 
-			// Process grouped file items
-			for (const [_path, fileItems] of fileGroups) {
-				await this.openFileWithMultipleSelections(fileItems);
-			}
-
-			// Process other items
-			for (const item of otherItems) {
+		// Process other items
+		for (const item of otherItems) {
+			try {
 				await this.openItem(item);
+				successCount++;
+			} catch (error) {
+				const errorMsg = this.formatItemError(item, error);
+				this.outputChannel.appendLine(`Failed to open item: ${errorMsg}`);
+				failedItems.push({ item, error: errorMsg });
 			}
+		}
 
+		// Determine overall result
+		if (failedItems.length === 0) {
 			return { success: true };
-		} catch (error) {
-			this.outputChannel.appendLine(`Open command error: ${error}`);
-			if (error instanceof Error && error.stack) {
-				this.outputChannel.appendLine('Stack trace:');
-				this.outputChannel.appendLine(error.stack);
-			}
-			return { success: false, error: String(error) };
+		} else if (successCount === 0) {
+			// All items failed
+			return {
+				success: false,
+				error: `Failed to open all ${items.length} items. First error: ${failedItems[0].error}`,
+			};
+		} else {
+			// Partial success
+			this.outputChannel.appendLine(`Opened ${successCount} items successfully, ${failedItems.length} failed`);
+			return {
+				success: true, // Return success if at least one item opened
+			};
 		}
 	}
 
@@ -338,5 +364,35 @@ export class OpenHandler {
 			`${path.basename(item.path)} (${item.from} ↔ ${item.to})`,
 			{ preview: false } // Don't open in preview mode
 		);
+	}
+
+	private formatFileError(path: string, error: unknown): string {
+		if (error instanceof Error) {
+			// Check for common error types
+			if (error.message.includes('ENOENT') || error.message.includes('file not found')) {
+				return `File not found: ${path}`;
+			} else if (error.message.includes('EACCES') || error.message.includes('permission denied')) {
+				return `Permission denied: ${path}`;
+			} else if (error.message.includes('EISDIR')) {
+				return `Path is a directory, not a file: ${path}`;
+			}
+			return error.message;
+		}
+		return String(error);
+	}
+
+	private formatItemError(item: OpenItem, error: unknown): string {
+		const errorStr = error instanceof Error ? error.message : String(error);
+
+		switch (item.type) {
+			case 'file':
+				return this.formatFileError(item.path, error);
+			case 'diff':
+				return `Failed to open diff (${item.left} ↔ ${item.right}): ${errorStr}`;
+			case 'gitDiff':
+				return `Failed to open git diff for ${item.path}: ${errorStr}`;
+			default:
+				return errorStr;
+		}
 	}
 }

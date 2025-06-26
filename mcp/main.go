@@ -220,7 +220,8 @@ LIMITATIONS:
 - Workspace queries without filters may exceed response limits
 - Requires language server support (varies by file type)
 - All paths must be absolute
-- Glob patterns: * (any chars), ? (one char), [abc] (char set), {a,b} (alternatives)`),
+- Glob patterns: * (any chars), ? (one char), [abc] (char set), {a,b} (alternatives)
+- Queries timeout after 15 seconds to prevent hanging on slow language servers`),
 			mcp.WithObject("args",
 				mcp.Description("Single query object or array of query objects"),
 			),

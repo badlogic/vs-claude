@@ -245,6 +245,7 @@ Depth parameter behavior:
 4. **Performance**: Large workspace queries can be slow - use filters
 5. **Caching**: Currently no caching - each query executes fresh
 6. **Details Limitation**: `includeDetails` provides what's available from DocumentSymbol (mainly the detail field)
+7. **Timeout**: All queries timeout after 15 seconds to prevent hanging on slow language servers
 
 ## Why These Queries Help Claude
 

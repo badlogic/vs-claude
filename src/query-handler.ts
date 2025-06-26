@@ -98,6 +98,8 @@ export type QueryResponse = { result: Result } | { error: string };
 // Symbol type is defined above
 
 export class QueryHandler {
+	private readonly QUERY_TIMEOUT_MS = 15000; // 15 seconds
+
 	constructor(private outputChannel: vscode.OutputChannel) {}
 
 	async execute(request: QueryRequest | QueryRequest[]): Promise<QueryResponse[]> {
@@ -115,25 +117,40 @@ export class QueryHandler {
 		return await Promise.all(queries.map((query) => this.executeSingle(query)));
 	}
 
+	private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+		const timeoutPromise = new Promise<never>((_, reject) => {
+			setTimeout(() => {
+				reject(new Error(`Query timeout: ${operation} took longer than ${timeoutMs}ms`));
+			}, timeoutMs);
+		});
+
+		return Promise.race([promise, timeoutPromise]);
+	}
+
 	private async executeSingle(request: QueryRequest): Promise<QueryResponse> {
 		this.outputChannel.appendLine(`Executing query: ${request.type}`);
 		this.outputChannel.appendLine(`Query args: ${JSON.stringify(request, null, 2)}`);
 
 		try {
-			switch (request.type) {
-				case 'symbols':
-					return await this.symbols(request);
-				case 'references':
-					return await this.findReferences(request);
-				case 'diagnostics':
-					return await this.getDiagnostics(request);
-				case 'definition':
-					return await this.findDefinition(request);
-				default: {
-					const exhaustiveCheck: never = request;
-					return { error: `Unknown query type: ${(exhaustiveCheck as QueryRequest).type}` };
+			// Wrap the query execution with timeout
+			const executeQuery = async (): Promise<QueryResponse> => {
+				switch (request.type) {
+					case 'symbols':
+						return await this.symbols(request);
+					case 'references':
+						return await this.findReferences(request);
+					case 'diagnostics':
+						return await this.getDiagnostics(request);
+					case 'definition':
+						return await this.findDefinition(request);
+					default: {
+						const exhaustiveCheck: never = request;
+						return { error: `Unknown query type: ${(exhaustiveCheck as QueryRequest).type}` };
+					}
 				}
-			}
+			};
+
+			return await this.withTimeout(executeQuery(), this.QUERY_TIMEOUT_MS, `${request.type} query`);
 		} catch (error) {
 			const errorMessage = `Query execution error: ${error}`;
 			this.outputChannel.appendLine(errorMessage);
