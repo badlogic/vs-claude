@@ -276,11 +276,8 @@ export class QueryHandler {
 		}
 
 		// Apply filtering using our existing logic
-		let filtered = this.filterSymbols(documentSymbols, query, kindFilter, '', includeDetails);
-
-		if (depth) {
-			filtered = this.limitDepth(filtered, depth);
-		}
+		// Depth is now handled within filterSymbols
+		const filtered = this.filterSymbols(documentSymbols, query, kindFilter, '', includeDetails, depth);
 
 		// Add file path to top-level symbols for consistency
 		const filePath = uri.fsPath;
@@ -529,7 +526,9 @@ export class QueryHandler {
 		query: string,
 		kindFilter?: SymbolKindName[],
 		parentPath: string = '',
-		includeDetails?: boolean
+		includeDetails?: boolean,
+		depth?: number,
+		currentDepthFromMatch: number = 0
 	): Symbol[] {
 		const result: Symbol[] = [];
 
@@ -551,12 +550,20 @@ export class QueryHandler {
 					// Symbol matches first part - consume it and continue with remaining query
 					if (remainingQuery && symbol.children && symbol.children.length > 0) {
 						// More query parts to match - recurse with remaining query
+						// Check if we should apply depth limiting
+						if (depth && currentDepthFromMatch > 0 && currentDepthFromMatch >= depth) {
+							// Depth limit reached - don't include children
+							continue;
+						}
+
 						const filteredChildren = this.filterSymbols(
 							symbol.children,
 							remainingQuery,
 							kindFilter,
 							fullPath,
-							includeDetails
+							includeDetails,
+							depth,
+							currentDepthFromMatch > 0 ? currentDepthFromMatch + 1 : 1 // Start or increment depth
 						);
 
 						if (filteredChildren.length > 0) {
@@ -573,8 +580,15 @@ export class QueryHandler {
 						}
 					} else if (!remainingQuery) {
 						// No more query parts - this is the final match
+						// Apply depth limiting if we're at the query root
 						const sym = this.convertDocumentSymbol(symbol, includeDetails);
-						result.push(sym);
+						if (depth && depth > 0) {
+							// Apply depth limiting to the matched symbol
+							const limited = this.limitDepth([sym], depth);
+							result.push(...limited);
+						} else {
+							result.push(sym);
+						}
 					}
 					// else: query expects more depth but symbol has no children - no match
 				} else if (symbol.children && symbol.children.length > 0) {
@@ -584,7 +598,9 @@ export class QueryHandler {
 						query, // Keep full query
 						kindFilter,
 						fullPath,
-						includeDetails
+						includeDetails,
+						depth,
+						currentDepthFromMatch // Keep same depth since we haven't matched yet
 					);
 
 					if (filteredChildren.length > 0) {
@@ -609,7 +625,13 @@ export class QueryHandler {
 				if (symbolMatches) {
 					// Symbol matches: include it with ALL its children (unfiltered)
 					const sym = this.convertDocumentSymbol(symbol, includeDetails);
-					result.push(sym);
+					// Apply depth limiting if specified
+					if (depth && depth > 0) {
+						const limited = this.limitDepth([sym], depth);
+						result.push(...limited);
+					} else {
+						result.push(sym);
+					}
 				} else if (symbol.children && symbol.children.length > 0) {
 					// Symbol doesn't match: check if any descendants match
 					const filteredChildren = this.filterSymbols(
@@ -617,7 +639,9 @@ export class QueryHandler {
 						query,
 						kindFilter,
 						fullPath,
-						includeDetails
+						includeDetails,
+						depth,
+						currentDepthFromMatch
 					);
 
 					if (filteredChildren.length > 0) {
