@@ -42,7 +42,7 @@
     "vscode:prepublish": "npm run build",
     "build": "tsc -p ./ && ./scripts/build-binaries.sh",
     "check": "biome check --write ./src && cd mcp && go fmt ./... && cd .. && tsc --noEmit",
-    "test": "cd mcp && go build -o ../bin/mcp-server-$(go env GOOS)-$(go env GOARCH)$(go env GOEXE) . && cd .. && tsc -p ./tsconfig.test.json && node ./out/test/runTest.js",
+    "test": "rm -rf out/test && cd mcp && go build -o ../bin/mcp-server-$(go env GOOS)-$(go env GOARCH)$(go env GOEXE) . && cd .. && tsc -p ./tsconfig.test.json && node ./out/test/runTest.js",
     "clean": "rm -rf out/ bin/",
     "prepare": "husky"
   },
