@@ -571,14 +571,63 @@ export class QueryHandler {
 	): Symbol[] {
 		const result: Symbol[] = [];
 
+		// Check if this is a hierarchical query (e.g., "Animation.get*")
+		const queryParts = query.split('.');
+		const isHierarchicalQuery = queryParts.length > 1;
+
 		for (const symbol of symbols) {
 			// Build the full hierarchical path for this symbol
 			const fullPath = parentPath ? `${parentPath}.${symbol.name}` : symbol.name;
 
-			// Check if this symbol matches our criteria using EITHER the full path OR just the symbol name
-			const fullPathMatches = this.nameAndKindMatches(fullPath, symbol.kind, query, kindFilter);
-			const nameMatches = this.nameAndKindMatches(symbol.name, symbol.kind, query, kindFilter);
-			const symbolMatches = fullPathMatches || nameMatches;
+			let symbolMatches = false;
+
+			if (isHierarchicalQuery) {
+				// For hierarchical queries like "Animation.get*"
+				const parentQuery = queryParts.slice(0, -1).join('.');
+				const leafQuery = queryParts[queryParts.length - 1];
+
+				// Check if this symbol IS the parent we're looking for
+				if (symbol.name === parentQuery || fullPath === parentQuery) {
+					// Found the parent symbol (e.g., found "Animation")
+					// Don't include the parent itself, but we'll process its children with the leaf query
+					symbolMatches = false;
+					// Special handling: we need to filter this symbol's children by the leaf query
+					if (symbol.children && symbol.children.length > 0) {
+						// Filter children by the leaf pattern
+						const filteredChildren = this.filterSymbols(
+							symbol.children,
+							leafQuery, // Use just the leaf query for children
+							kindFilter,
+							fullPath, // Pass the current symbol as the parent path
+							includeDetails
+						);
+
+						if (filteredChildren.length > 0) {
+							// Include this parent symbol with only the filtered children
+							const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
+							const sym: Symbol = {
+								name: symbol.name,
+								detail: symbol.detail,
+								kind: vscode.SymbolKind[symbol.kind],
+								location: this.formatRange(combinedRange),
+								children: filteredChildren,
+							};
+							result.push(sym);
+						}
+					}
+					// Continue to next symbol since we've handled this one
+					continue;
+				} else {
+					// Not the parent we're looking for, but might contain it
+					// Keep the full query for recursive search
+					symbolMatches = false;
+				}
+			} else {
+				// For non-hierarchical queries, use the existing logic
+				const fullPathMatches = this.nameAndKindMatches(fullPath, symbol.kind, query, kindFilter);
+				const nameMatches = this.nameAndKindMatches(symbol.name, symbol.kind, query, kindFilter);
+				symbolMatches = fullPathMatches || nameMatches;
+			}
 
 			if (symbolMatches) {
 				// Symbol matches: include it with ALL its children (unfiltered)
@@ -907,8 +956,15 @@ export class QueryHandler {
 		} catch (error) {
 			// Type hierarchy might not be supported by the language server
 			if (error instanceof Error) {
-				if (error.message.includes('No provider') || error.message.includes('not supported')) {
-					return { error: 'Type hierarchy not supported for this file type' };
+				const errorMsg = error.message.toLowerCase();
+				if (
+					errorMsg.includes('no provider') ||
+					errorMsg.includes('not supported') ||
+					errorMsg.includes('no type hierarchy provider')
+				) {
+					return {
+						error: 'Type hierarchy not supported by the language server for this file type',
+					};
 				}
 			}
 			return { error: `Failed to find type hierarchy: ${error}` };
