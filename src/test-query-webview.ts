@@ -197,7 +197,7 @@ export class TestQueryWebviewProvider {
             <li><strong>Get file structure:</strong> symbols path="/your/file.ts"</li>
             <li><strong>Find test classes:</strong> symbols query="*Test" kinds=["class"]</li>
             <li><strong>Find getters and setters:</strong> symbols query="{get,set}*" kinds=["method"]</li>
-            <li><strong>List only top-level types:</strong> symbols path="/your/file.ts" depth=1</li>
+            <li><strong>List only top-level types:</strong> symbols path="/your/file.ts" query="*" kinds=["type"]</li>
             <li><strong>Find services in folder:</strong> symbols path="/src" query="*Service"</li>
         </ul>
     </div>
@@ -245,10 +245,6 @@ export class TestQueryWebviewProvider {
                 </div>
                 <input type="hidden" id="symbols-kinds" />
             </div>
-            <div class="input-group">
-                <label for="symbols-depth">Depth (optional - limit tree depth):</label>
-                <input type="text" id="symbols-depth" placeholder="1 for top-level only" />
-            </div>
             <button onclick="runSymbols()">Search Symbols</button>
             <button onclick="clearResult('symbols')">Clear</button>
             <div id="symbols-result" class="result"></div>
@@ -288,8 +284,8 @@ export class TestQueryWebviewProvider {
                 <input type="text" id="references-line" placeholder="42" />
             </div>
             <div class="input-group">
-                <label for="references-character">Character Position (optional, 1-based):</label>
-                <input type="text" id="references-character" placeholder="15" />
+                <label for="references-column">Column Position (optional, 1-based):</label>
+                <input type="text" id="references-column" placeholder="15" />
                 <small style="display: block; margin-top: 4px; color: var(--vscode-descriptionForeground);">
                     Tip: Use symbols search first to locate a symbol, then use the line number from the result
                 </small>
@@ -316,8 +312,8 @@ export class TestQueryWebviewProvider {
                 <input type="text" id="definition-line" placeholder="42" />
             </div>
             <div class="input-group">
-                <label for="definition-character">Character Position (optional, 1-based):</label>
-                <input type="text" id="definition-character" placeholder="15" />
+                <label for="definition-column">Column Position (optional, 1-based):</label>
+                <input type="text" id="definition-column" placeholder="15" />
             </div>
             <button onclick="runDefinition()">Find Definition</button>
             <button onclick="clearResult('definition')">Clear</button>
@@ -344,8 +340,8 @@ export class TestQueryWebviewProvider {
                 </small>
             </div>
             <div class="input-group">
-                <label for="supertype-character">Character Position (optional, 1-based):</label>
-                <input type="text" id="supertype-character" placeholder="15" />
+                <label for="supertype-column">Column Position (optional, 1-based):</label>
+                <input type="text" id="supertype-column" placeholder="15" />
             </div>
             <button onclick="runSupertype()">Find Supertypes</button>
             <button onclick="clearResult('supertype')">Clear</button>
@@ -372,8 +368,8 @@ export class TestQueryWebviewProvider {
                 </small>
             </div>
             <div class="input-group">
-                <label for="subtype-character">Character Position (optional, 1-based):</label>
-                <input type="text" id="subtype-character" placeholder="15" />
+                <label for="subtype-column">Column Position (optional, 1-based):</label>
+                <input type="text" id="subtype-column" placeholder="15" />
             </div>
             <button onclick="runSubtype()">Find Subtypes</button>
             <button onclick="clearResult('subtype')">Clear</button>
@@ -415,7 +411,6 @@ export class TestQueryWebviewProvider {
         function runSymbols() {
             const query = document.getElementById('symbols-query').value;
             const path = document.getElementById('symbols-path').value;
-            const depth = document.getElementById('symbols-depth').value;
 
             const request = {
                 type: 'symbols'
@@ -429,9 +424,6 @@ export class TestQueryWebviewProvider {
             }
             if (selectedKinds.length > 0) {
                 request.kinds = selectedKinds;
-            }
-            if (depth) {
-                request.depth = parseInt(depth, 10);
             }
 
             runQuery(request, 'symbols');
@@ -454,7 +446,7 @@ export class TestQueryWebviewProvider {
         function runReferences() {
             const path = document.getElementById('references-path').value;
             const line = document.getElementById('references-line').value;
-            const character = document.getElementById('references-character').value;
+            const column = document.getElementById('references-column').value;
 
             if (!path) {
                 showError('Path is required', 'references');
@@ -471,8 +463,8 @@ export class TestQueryWebviewProvider {
                 line: parseInt(line, 10)
             };
 
-            if (character) {
-                request.character = parseInt(character, 10);
+            if (column) {
+                request.column = parseInt(column, 10);
             }
 
             runQuery(request, 'references');
@@ -481,7 +473,7 @@ export class TestQueryWebviewProvider {
         function runDefinition() {
             const path = document.getElementById('definition-path').value;
             const line = document.getElementById('definition-line').value;
-            const character = document.getElementById('definition-character').value;
+            const column = document.getElementById('definition-column').value;
 
             if (!path) {
                 showError('Path is required', 'definition');
@@ -498,8 +490,8 @@ export class TestQueryWebviewProvider {
                 line: parseInt(line, 10)
             };
 
-            if (character) {
-                request.character = parseInt(character, 10);
+            if (column) {
+                request.column = parseInt(column, 10);
             }
 
             runQuery(request, 'definition');
@@ -508,7 +500,7 @@ export class TestQueryWebviewProvider {
         function runSupertype() {
             const path = document.getElementById('supertype-path').value;
             const line = document.getElementById('supertype-line').value;
-            const character = document.getElementById('supertype-character').value;
+            const column = document.getElementById('supertype-column').value;
 
             if (!path) {
                 showError('Path is required', 'supertype');
@@ -525,8 +517,8 @@ export class TestQueryWebviewProvider {
                 line: parseInt(line, 10)
             };
 
-            if (character) {
-                request.character = parseInt(character, 10);
+            if (column) {
+                request.column = parseInt(column, 10);
             }
 
             runQuery(request, 'supertype');
@@ -535,7 +527,7 @@ export class TestQueryWebviewProvider {
         function runSubtype() {
             const path = document.getElementById('subtype-path').value;
             const line = document.getElementById('subtype-line').value;
-            const character = document.getElementById('subtype-character').value;
+            const column = document.getElementById('subtype-column').value;
 
             if (!path) {
                 showError('Path is required', 'subtype');
@@ -552,8 +544,8 @@ export class TestQueryWebviewProvider {
                 line: parseInt(line, 10)
             };
 
-            if (character) {
-                request.character = parseInt(character, 10);
+            if (column) {
+                request.column = parseInt(column, 10);
             }
 
             runQuery(request, 'subtype');

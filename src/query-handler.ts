@@ -28,9 +28,7 @@ interface SymbolsRequest {
 	query?: string; // Optional: pattern to match (default: "*")
 	path?: string; // Optional: file or folder path (default: workspace)
 	kinds?: SymbolKindName[]; // Optional: filter by symbol types
-	depth?: number; // Optional: limit tree depth
 	exclude?: string[]; // Optional: glob patterns to exclude files/folders
-	includeDetails?: boolean; // Optional: include type signatures and documentation
 	countOnly?: boolean; // Optional: return only the count of results
 }
 
@@ -43,21 +41,21 @@ interface ReferencesRequest {
 	type: 'references';
 	path: string; // Required: file containing the symbol
 	line: number; // Required: line number of the symbol (1-based)
-	character?: number; // Optional: character position in the line (1-based)
+	column?: number; // Optional: column position in the line (1-based)
 }
 
 interface DefinitionRequest {
 	type: 'definition';
 	path: string; // Required: file containing the symbol
 	line: number; // Required: line number of the symbol (1-based)
-	character?: number; // Optional: character position in the line (1-based)
+	column?: number; // Optional: column position in the line (1-based)
 }
 
 interface TypeHierarchyRequest {
 	type: 'supertype' | 'subtype';
 	path: string; // Required: file containing the type
 	line: number; // Required: line number of the type (1-based)
-	character?: number; // Optional: character position in the line (1-based)
+	column?: number; // Optional: column position in the line (1-based)
 }
 
 export type QueryRequest =
@@ -70,13 +68,9 @@ export type QueryRequest =
 // Response types for each query
 interface Symbol {
 	name: string;
-	detail?: string;
 	kind: string;
 	location: string;
 	children?: Symbol[];
-	// Additional details when includeDetails is true
-	documentation?: string;
-	type?: string; // Type signature for functions/methods/properties
 }
 
 interface Diagnostic {
@@ -193,23 +187,10 @@ export class QueryHandler {
 					const stat = await vscode.workspace.fs.stat(uri);
 					if (stat.type === vscode.FileType.File) {
 						// File scope - use document symbols directly
-						result = await this.symbolsInFile(
-							uri,
-							query,
-							request.kinds,
-							request.depth,
-							request.includeDetails
-						);
+						result = await this.symbolsInFile(uri, query, request.kinds);
 					} else {
 						// Folder scope - search within folder
-						result = await this.symbolsInFolder(
-							request.path,
-							query,
-							request.kinds,
-							request.depth,
-							request.includeDetails,
-							request.exclude
-						);
+						result = await this.symbolsInFolder(request.path, query, request.kinds, request.exclude);
 					}
 				} catch {
 					// Path doesn't exist or isn't accessible
@@ -217,13 +198,7 @@ export class QueryHandler {
 				}
 			} else {
 				// Workspace scope
-				result = await this.symbolsInWorkspace(
-					query,
-					request.kinds,
-					request.depth,
-					request.includeDetails,
-					request.exclude
-				);
+				result = await this.symbolsInWorkspace(query, request.kinds, request.exclude);
 			}
 
 			// Handle countOnly
@@ -244,24 +219,25 @@ export class QueryHandler {
 	private async symbolsInFile(
 		uri: vscode.Uri,
 		query: string,
-		kindFilter?: SymbolKindName[],
-		depth?: number,
-		includeDetails?: boolean
+		kindFilter?: SymbolKindName[]
 	): Promise<{ result: Symbol[] } | { error: string }> {
 		const documentSymbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
 			'vscode.executeDocumentSymbolProvider',
 			uri
 		);
 
-		if (!documentSymbols || documentSymbols.length === 0) {
+		if (!documentSymbols) {
+			this.outputChannel.appendLine(
+				`No symbol provider available for ${uri.fsPath} - language server may not be active yet`
+			);
 			return { result: [] };
 		}
 
-		// Apply filtering using our existing logic
-		// Depth is now handled within filterSymbols
-		const filtered = this.filterSymbols(documentSymbols, query, kindFilter, '', includeDetails, depth);
+		if (documentSymbols.length === 0) {
+			return { result: [] };
+		}
 
-		// Add file path to top-level symbols for consistency
+		const filtered = this.filterSymbols(documentSymbols, query, kindFilter, '');
 		const filePath = uri.fsPath;
 		for (const symbol of filtered) {
 			symbol.location = `${filePath}:${symbol.location}`;
@@ -273,21 +249,24 @@ export class QueryHandler {
 	private async symbolsInWorkspace(
 		query: string,
 		kindFilter?: SymbolKindName[],
-		depth?: number,
-		includeDetails?: boolean,
 		exclude?: string[]
 	): Promise<{ result: Symbol[] } | { error: string }> {
 		// Extract root query for workspace search
 		const rootQuery = query.split('.')[0];
 
-		// Search workspace with root query
+		// Strip glob characters from the root query for VS Code's workspace symbol provider
+		// VS Code doesn't support glob patterns and treats them as literal characters
+		// We'll apply our own pattern matching on the results instead
+		const cleanedRootQuery = rootQuery.replace(/[*?[\]{}]/g, '');
+
+		// Search workspace with cleaned query
 		const workspaceSymbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
 			'vscode.executeWorkspaceSymbolProvider',
-			rootQuery
+			cleanedRootQuery
 		);
 
 		this.outputChannel.appendLine(
-			`Workspace search for "${rootQuery}" returned ${workspaceSymbols?.length || 0} symbols`
+			`Workspace search for "${rootQuery}" (cleaned: "${cleanedRootQuery}") returned ${workspaceSymbols?.length || 0} symbols`
 		);
 
 		if (!workspaceSymbols || workspaceSymbols.length === 0) {
@@ -321,7 +300,7 @@ export class QueryHandler {
 			try {
 				const uri = vscode.Uri.file(filePath);
 				// Use symbolsInFile for consistent logic
-				const fileResult = await this.symbolsInFile(uri, query, kindFilter, depth, includeDetails);
+				const fileResult = await this.symbolsInFile(uri, query, kindFilter);
 				if ('result' in fileResult) {
 					results.push(...fileResult.result);
 				}
@@ -341,8 +320,6 @@ export class QueryHandler {
 		folderPath: string,
 		query: string,
 		kindFilter?: SymbolKindName[],
-		depth?: number,
-		includeDetails?: boolean,
 		exclude?: string[]
 	): Promise<{ result: Symbol[] } | { error: string }> {
 		// Instead of searching workspace and filtering, enumerate files in folder
@@ -386,7 +363,7 @@ export class QueryHandler {
 		for (const fileUri of files) {
 			try {
 				// Use symbolsInFile for consistent logic
-				const fileResult = await this.symbolsInFile(fileUri, query, kindFilter, depth, includeDetails);
+				const fileResult = await this.symbolsInFile(fileUri, query, kindFilter);
 				if ('result' in fileResult) {
 					results.push(...fileResult.result);
 				}
@@ -440,7 +417,7 @@ export class QueryHandler {
 			const uri = vscode.Uri.file(request.path);
 			const position = new vscode.Position(
 				request.line - 1, // Convert to 0-based
-				request.character || 0
+				request.column ? request.column - 1 : 0
 			);
 
 			// Find references at this position
@@ -507,10 +484,7 @@ export class QueryHandler {
 		symbols: vscode.DocumentSymbol[],
 		query: string,
 		kindFilter?: SymbolKindName[],
-		parentPath: string = '',
-		includeDetails?: boolean,
-		depth?: number,
-		currentDepthFromMatch: number = 0
+		parentPath: string = ''
 	): Symbol[] {
 		const result: Symbol[] = [];
 
@@ -519,33 +493,22 @@ export class QueryHandler {
 		const isHierarchicalQuery = queryParts.length > 1;
 
 		for (const symbol of symbols) {
-			// Build the full hierarchical path for this symbol
-			const fullPath = parentPath ? `${parentPath}.${symbol.name}` : symbol.name;
-
 			if (isHierarchicalQuery) {
+				// Build the full hierarchical path for this symbol
+				const fullPath = parentPath ? `${parentPath}.${symbol.name}` : symbol.name;
 				// For hierarchical queries like "Animation.get*" or "spine.Animation.get*"
 				const firstPart = queryParts[0];
 				const remainingQuery = queryParts.slice(1).join('.');
 
-				// Check if this symbol matches the first part of the query
-				if (this.nameAndKindMatches(symbol.name, symbol.kind, firstPart, kindFilter)) {
+				// Check if this symbol matches the first part of the query, no kind matching, we only do that for leafs
+				if (this.nameAndKindMatches(symbol.name, symbol.kind, firstPart)) {
 					// Symbol matches first part - consume it and continue with remaining query
 					if (remainingQuery && symbol.children && symbol.children.length > 0) {
-						// More query parts to match - recurse with remaining query
-						// Check if we should apply depth limiting
-						if (depth && currentDepthFromMatch > 0 && currentDepthFromMatch >= depth) {
-							// Depth limit reached - don't include children
-							continue;
-						}
-
 						const filteredChildren = this.filterSymbols(
 							symbol.children,
 							remainingQuery,
 							kindFilter,
-							fullPath,
-							includeDetails,
-							depth,
-							currentDepthFromMatch > 0 ? currentDepthFromMatch + 1 : 1 // Start or increment depth
+							fullPath
 						);
 
 						if (filteredChildren.length > 0) {
@@ -553,7 +516,6 @@ export class QueryHandler {
 							const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
 							const sym: Symbol = {
 								name: symbol.name,
-								detail: symbol.detail,
 								kind: vscode.SymbolKind[symbol.kind],
 								location: this.formatRange(combinedRange),
 								children: filteredChildren,
@@ -566,13 +528,9 @@ export class QueryHandler {
 						const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
 						const sym: Symbol = {
 							name: symbol.name,
-							detail: symbol.detail,
 							kind: vscode.SymbolKind[symbol.kind],
 							location: this.formatRange(combinedRange),
 						};
-						if (includeDetails && symbol.detail) {
-							sym.type = symbol.detail;
-						}
 						result.push(sym);
 					}
 					// else: query expects more depth but symbol has no children - no match
@@ -582,10 +540,7 @@ export class QueryHandler {
 						symbol.children,
 						query, // Keep full query
 						kindFilter,
-						fullPath,
-						includeDetails,
-						depth,
-						currentDepthFromMatch // Keep same depth since we haven't matched yet
+						fullPath
 					);
 
 					if (filteredChildren.length > 0) {
@@ -593,7 +548,6 @@ export class QueryHandler {
 						const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
 						const sym: Symbol = {
 							name: symbol.name,
-							detail: symbol.detail,
 							kind: vscode.SymbolKind[symbol.kind],
 							location: this.formatRange(combinedRange),
 							children: filteredChildren,
@@ -602,24 +556,18 @@ export class QueryHandler {
 					}
 				}
 			} else {
-				// Non-hierarchical query - use existing logic
-				const fullPathMatches = this.nameAndKindMatches(fullPath, symbol.kind, query, kindFilter);
-				const nameMatches = this.nameAndKindMatches(symbol.name, symbol.kind, query, kindFilter);
-				const symbolMatches = fullPathMatches || nameMatches;
+				// Non-hierarchical query - match only on symbol name
+				const symbolMatches = this.nameAndKindMatches(symbol.name, symbol.kind, query, kindFilter);
 
 				if (symbolMatches) {
 					// Symbol matches: include it WITHOUT children (query doesn't ask for them)
 					const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
 					const sym: Symbol = {
 						name: symbol.name,
-						detail: symbol.detail,
 						kind: vscode.SymbolKind[symbol.kind],
 						location: this.formatRange(combinedRange),
 						// Don't include children unless query explicitly asks for them
 					};
-					if (includeDetails && symbol.detail) {
-						sym.type = symbol.detail;
-					}
 					result.push(sym);
 				} else if (symbol.children && symbol.children.length > 0) {
 					// Symbol doesn't match: check if any descendants match
@@ -627,10 +575,7 @@ export class QueryHandler {
 						symbol.children,
 						query,
 						kindFilter,
-						fullPath,
-						includeDetails,
-						depth,
-						currentDepthFromMatch
+						parentPath ? `${parentPath}.${symbol.name}` : symbol.name
 					);
 
 					if (filteredChildren.length > 0) {
@@ -638,7 +583,6 @@ export class QueryHandler {
 						const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
 						const sym: Symbol = {
 							name: symbol.name,
-							detail: symbol.detail,
 							kind: vscode.SymbolKind[symbol.kind],
 							location: this.formatRange(combinedRange),
 							children: filteredChildren,
@@ -646,34 +590,6 @@ export class QueryHandler {
 						result.push(sym);
 					}
 				}
-			}
-		}
-
-		return result;
-	}
-
-	private convertDocumentSymbol(symbol: vscode.DocumentSymbol, includeDetails?: boolean): Symbol {
-		// Use selectionRange start and range end for best location info
-		const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
-
-		const result: Symbol = {
-			name: symbol.name,
-			detail: symbol.detail,
-			kind: vscode.SymbolKind[symbol.kind],
-			location: this.formatRange(combinedRange),
-			children:
-				symbol.children && symbol.children.length > 0
-					? symbol.children.map((s) => this.convertDocumentSymbol(s, includeDetails))
-					: undefined,
-		};
-
-		// Add additional details if requested
-		if (includeDetails) {
-			// Note: VS Code's DocumentSymbol doesn't provide documentation or full type signatures
-			// We include what's available in the detail field
-			// For richer information, we'd need to use other language server features
-			if (symbol.detail) {
-				result.type = symbol.detail;
 			}
 		}
 
@@ -689,28 +605,12 @@ export class QueryHandler {
 		}));
 	}
 
-	private limitDepth(symbols: Symbol[], maxDepth: number, currentDepth: number = 1): Symbol[] {
-		return symbols.map((symbol) => {
-			if (currentDepth >= maxDepth) {
-				// Remove children if we've reached max depth
-				return { ...symbol, children: undefined };
-			} else if (symbol.children) {
-				// Recursively limit depth of children
-				return {
-					...symbol,
-					children: this.limitDepth(symbol.children, maxDepth, currentDepth + 1),
-				};
-			}
-			return symbol;
-		});
-	}
-
 	private async findDefinition(request: DefinitionRequest): Promise<{ result: Definition[] } | { error: string }> {
 		try {
 			const uri = vscode.Uri.file(request.path);
 			const position = new vscode.Position(
 				request.line - 1, // Convert to 0-based
-				request.character ? request.character - 1 : 0
+				request.column ? request.column - 1 : 0
 			);
 
 			// Find definition at this position
@@ -869,7 +769,7 @@ export class QueryHandler {
 			const uri = vscode.Uri.file(request.path);
 			const position = new vscode.Position(
 				request.line - 1, // Convert to 0-based
-				request.character ? request.character - 1 : 0
+				request.column ? request.column - 1 : 0
 			);
 
 			this.outputChannel.appendLine(

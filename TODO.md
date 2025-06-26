@@ -17,23 +17,7 @@
 
 ## ✨ Features to Implement
 
-### Query Tool ✅
-- [x] Implement MCP query tool for searching/querying the codebase
-  - [x] Define query tool in Go MCP server
-  - [x] Add query handler in extension
-  - [x] Support different query types:
-    - Unified symbol search (replaces file/content search with better LSP-based approach)
-    - Diagnostics (errors/warnings)
-    - References (find usages)
-    - Definition (go to definition)
-  - [x] Return results in structured format
-  - [x] Advanced features:
-    - Exclude patterns
-    - Count only mode
-    - Include type details
-    - Hierarchical queries (e.g., Class.method*)
-
-### Exec Tool  
+### Exec Tool
 - [ ] Implement MCP exec tool for running commands
   - [ ] Define exec tool in Go MCP server
   - [ ] Add exec handler in extension
@@ -45,8 +29,3 @@
     - Stream output back to Claude?
     - Handle long-running commands
     - Error handling
-
-## 🔧 Improvements
-- [ ] Add more comprehensive error messages for common issues
-- [ ] Improve logging for debugging
-- [ ] Add configuration options for tool behavior
