@@ -175,7 +175,8 @@ export class TestQueryWebviewProvider {
             <li><strong>Find all classes:</strong> findSymbols query="*" kind="class"</li>
             <li><strong>Find getters in a specific class:</strong> outline path="/your/file.java" symbol="Animation.get*"</li>
             <li><strong>Get only class members:</strong> outline path="/your/file.java" symbol="Animation.*"</li>
-            <li><strong>Find all test methods:</strong> findSymbols query="*test*" kind="method"</li>
+            <li><strong>Find test classes:</strong> findSymbols query="*Test" kind="class"</li>
+            <li><strong>Find getters and setters:</strong> findSymbols query="{get,set}*" kind="method"</li>
             <li><strong>List only top-level types:</strong> outline path="/your/file.dart" depth="1"</li>
             <li><strong>Find references:</strong> Use line number from findSymbols result</li>
         </ul>
@@ -189,8 +190,11 @@ export class TestQueryWebviewProvider {
         </div>
         <div class="query-content">
             <div class="input-group">
-                <label for="findSymbols-query">Query (supports wildcards like "handle*"):</label>
+                <label for="findSymbols-query">Query (supports glob patterns):</label>
                 <input type="text" id="findSymbols-query" value="handle*" />
+                <small style="display: block; margin-top: 4px; color: var(--vscode-descriptionForeground);">
+                    Patterns: * (any), ? (one char), [abc] (any of), {get,set}* (alternatives), *Test (suffix)
+                </small>
             </div>
             <div class="input-group">
                 <label for="findSymbols-path">Path (optional - if provided, searches only in this file):</label>
@@ -232,8 +236,8 @@ export class TestQueryWebviewProvider {
                 <label for="outline-symbol">Symbol (optional - supports wildcards and dot notation):</label>
                 <input type="text" id="outline-symbol" placeholder="ClassName or Animation.get*" />
                 <small style="display: block; margin-top: 4px; color: var(--vscode-descriptionForeground);">
-                    Examples: "MyClass" (show class), "MyClass.*" (only members), "MyClass.get*" (only getters in MyClass),<br>
-                    "get*" (all getters in file), "*Test" (all test classes)
+                    Examples: "MyClass" (show class), "MyClass.*" (only members), "MyClass.get*" (getters in MyClass),<br>
+                    "get*" (all getters), "*Test" (test classes), "[A-Z]*" (uppercase start), "{get,set}*" (getters/setters)
                 </small>
             </div>
             <div class="input-group">

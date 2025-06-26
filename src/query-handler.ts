@@ -1,3 +1,4 @@
+import { minimatch } from 'minimatch';
 import * as vscode from 'vscode';
 
 // Request types for each query
@@ -288,9 +289,9 @@ export class QueryHandler {
 	}
 
 	private matchesQuery(name: string, query: string): boolean {
-		const pattern = query.replace(/\*/g, '.*');
-		const regex = new RegExp(`^${pattern}`, 'i');
-		return regex.test(name);
+		// Use minimatch for glob-style pattern matching
+		// This supports *, ?, [abc], {a,b,c}, and ** patterns
+		return minimatch(name, query, { nocase: true });
 	}
 
 	private formatRange(range: vscode.Range): string {

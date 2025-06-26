@@ -129,23 +129,25 @@ Query types (with required parameters marked):
    USE THIS to find where symbols are defined in the codebase!
    
    Parameters: query (required), path?, kind?, exact?
-   - query: The symbol name to search for (e.g., "Animation", "handle*")
+   - query: Symbol name with glob patterns (*, ?, [abc], {a,b}, **)
    - kind: Filter by symbol type (e.g., "class", "method", "interface")
    - path: Limit results to a specific file
    - exact: Use exact matching instead of pattern matching
    
-   {"type": "findSymbols", "query": "Animation"}  // find all symbols named Animation
+   {"type": "findSymbols", "query": "Animation"}  // find symbols containing "Animation"
    {"type": "findSymbols", "query": "*", "kind": "class"}  // find ALL classes in workspace
-   {"type": "findSymbols", "query": "get*", "kind": "method"}  // find all getter methods
-   {"type": "findSymbols", "query": "process*", "path": "/path/to/file.ts"}  // limit results to specific file
-   {"type": "findSymbols", "query": "Skeleton", "exact": true}  // exact name match
-   {"type": "findSymbols", "query": "handle*", "kind": "function,method"}  // only functions/methods
+   {"type": "findSymbols", "query": "get*", "kind": "method"}  // methods starting with "get"
+   {"type": "findSymbols", "query": "*Test", "kind": "class"}  // classes ending with "Test"
+   {"type": "findSymbols", "query": "[A-Z]*Service"}  // services starting with uppercase
+   {"type": "findSymbols", "query": "{get,set}*"}  // getters and setters
+   {"type": "findSymbols", "query": "process?", "path": "/path/to/file.ts"}  // process + 1 char
+   {"type": "findSymbols", "query": "Skeleton", "exact": true}  // exact match only
 
 2. Get File Outline - Understand file/class structure, see methods/fields/properties
    USE THIS to explore a file's API and structure!
    
    Parameters: path (required), symbol?, kind?, depth?
-   - symbol: Filter by name (wildcards + dot notation for hierarchy)
+   - symbol: Filter with glob patterns + dot notation (e.g., "Class.get*")
    - kind: Filter by symbol type (comma-separated list)
    - depth: Limit depth of results (1 = only top-level symbols)
    
@@ -213,7 +215,7 @@ If this tool doesn't return expected results:
 
 Notes:
 - Multiple queries run in parallel for performance
-- Use exact:true for precise matching, wildcards (*) for patterns
+- Glob patterns: * (any chars), ? (one char), [abc], {a,b}, ** (any depth)
 - Available symbol kinds: class, method, property, field, constructor, function, variable,
   constant, enum, interface, namespace, package, module, struct, type (=class+interface+struct+enum)
 - Batch queries: all execute even if some fail, each has its own success/error status

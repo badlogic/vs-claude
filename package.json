@@ -31,6 +31,10 @@
       {
         "command": "vs-claude.uninstall",
         "title": "VS Claude: Uninstall MCP"
+      },
+      {
+        "command": "vs-claude.testQuery",
+        "title": "VS Claude: Test Query Tool"
       }
     ]
   },
@@ -60,6 +64,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.0.5",
     "@types/glob": "^8.1.0",
+    "@types/minimatch": "^5.1.2",
     "@types/mocha": "^10.0.1",
     "@types/node": "^20.0.0",
     "@types/sinon": "^17.0.4",
@@ -68,6 +73,7 @@
     "glob": "^8.1.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.1.2",
+    "minimatch": "^10.0.3",
     "mocha": "^10.2.0",
     "sinon": "^17.0.1",
     "typescript": "^5.0.0"
