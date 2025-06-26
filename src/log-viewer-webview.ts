@@ -18,6 +18,9 @@ export class LogViewerWebviewProvider {
 			localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, '')],
 		});
 
+		// Set the icon
+		this.panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'logo.png');
+
 		this.panel.webview.html = this.getWebviewContent(this.panel.webview);
 
 		// Send current logs

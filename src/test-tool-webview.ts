@@ -30,6 +30,9 @@ export class TestToolWebviewProvider {
 			}
 		);
 
+		// Set the icon
+		this.panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'logo.png');
+
 		this.panel.webview.html = this.getWebviewContent(this.panel.webview);
 
 		this.panel.webview.onDidReceiveMessage(
