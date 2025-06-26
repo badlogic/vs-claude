@@ -173,9 +173,10 @@ export class TestQueryWebviewProvider {
         <h3 style="margin-top: 0;">Quick Examples to Try:</h3>
         <ul style="margin: 0; padding-left: 20px;">
             <li><strong>Find all classes:</strong> findSymbols query="*" kind="class"</li>
-            <li><strong>Find getters in a file:</strong> outline path="/your/file.ts" symbol="get*" kind="method"</li>
+            <li><strong>Find getters in a specific class:</strong> outline path="/your/file.java" symbol="Animation.get*"</li>
+            <li><strong>Get only class members:</strong> outline path="/your/file.java" symbol="Animation.*"</li>
             <li><strong>Find all test methods:</strong> findSymbols query="*test*" kind="method"</li>
-            <li><strong>Get class structure:</strong> outline path="/your/file.ts" symbol="YourClass"</li>
+            <li><strong>List only top-level types:</strong> outline path="/your/file.dart" depth="1"</li>
             <li><strong>Find references:</strong> Use line number from findSymbols result</li>
         </ul>
     </div>
@@ -228,10 +229,11 @@ export class TestQueryWebviewProvider {
                 <input type="text" id="outline-path" placeholder="/path/to/file.ts" />
             </div>
             <div class="input-group">
-                <label for="outline-symbol">Symbol (optional - supports wildcards like "get*", "set*"):</label>
-                <input type="text" id="outline-symbol" placeholder="ClassName or get*" />
+                <label for="outline-symbol">Symbol (optional - supports wildcards and dot notation):</label>
+                <input type="text" id="outline-symbol" placeholder="ClassName or Animation.get*" />
                 <small style="display: block; margin-top: 4px; color: var(--vscode-descriptionForeground);">
-                    Examples: "MyClass" (exact), "get*" (all getters), "*Test" (all test classes), "handle*" (all handlers)
+                    Examples: "MyClass" (show class), "MyClass.*" (only members), "MyClass.get*" (only getters in MyClass),<br>
+                    "get*" (all getters in file), "*Test" (all test classes)
                 </small>
             </div>
             <div class="input-group">

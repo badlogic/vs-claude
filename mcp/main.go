@@ -144,18 +144,20 @@ Query types (with required parameters marked):
 2. Get File Outline - Understand file/class structure, see methods/fields/properties
    USE THIS to explore a file's API and structure!
    
-   Parameters: path (required), symbol?, kind?
-   - symbol: Filter by symbol name (supports wildcards like "get*", "set*", "*Test")
+   Parameters: path (required), symbol?, kind?, depth?
+   - symbol: Filter by name (wildcards + dot notation for hierarchy)
    - kind: Filter by symbol type (comma-separated list)
+   - depth: Limit depth of results (1 = only top-level symbols)
    
    {"type": "outline", "path": "/path/to/file.ts"}  // full file structure
-   {"type": "outline", "path": "/path/to/file.ts", "symbol": "Animation"}  // outline of Animation class
-   {"type": "outline", "path": "/path/to/file.ts", "symbol": "get*"}  // all getters in file
+   {"type": "outline", "path": "/path/to/file.ts", "depth": 1}  // only top-level classes/functions
+   {"type": "outline", "path": "/path/to/Animation.java", "symbol": "Animation"}  // show Animation class with all members
+   {"type": "outline", "path": "/path/to/Animation.java", "symbol": "Animation.*"}  // only members of Animation (no class itself)
+   {"type": "outline", "path": "/path/to/Animation.java", "symbol": "Animation.get*"}  // only getters in Animation class
+   {"type": "outline", "path": "/path/to/Animation.java", "symbol": "Animation.*", "kind": "method"}  // only methods of Animation
+   {"type": "outline", "path": "/path/to/file.ts", "symbol": "get*"}  // all getters in entire file
    {"type": "outline", "path": "/path/to/file.ts", "symbol": "*Test"}  // all test classes/methods
-   {"type": "outline", "path": "/path/to/file.ts", "symbol": "Animation", "kind": "method"}  // only methods of Animation
-   {"type": "outline", "path": "/path/to/file.ts", "kind": "method"}  // all methods in file
-   {"type": "outline", "path": "/path/to/file.ts", "kind": "field,property"}  // all fields/properties in file
-   {"type": "outline", "path": "/path/to/file.ts", "symbol": "get*,set*", "kind": "method"}  // all getter/setter methods
+   {"type": "outline", "path": "/path/to/file.dart", "kind": "class,interface", "depth": 1}  // all types without members
 
 3. Get Diagnostics - Get compilation errors, warnings, and issues
    

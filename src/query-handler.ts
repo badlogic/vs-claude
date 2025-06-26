@@ -12,8 +12,9 @@ interface FindSymbolsRequest {
 interface OutlineRequest {
 	type: 'outline';
 	path: string;
-	symbol?: string; // Filter to specific symbol or use wildcards like "get*"
+	symbol?: string; // Filter by name, supports wildcards and dot notation (e.g., "Animation.get*")
 	kind?: string;
+	depth?: number; // Limit depth of results (1 = only top-level)
 }
 
 interface DiagnosticsRequest {
@@ -169,11 +170,29 @@ export class QueryHandler {
 			// Apply filtering if requested
 			let symbolData: OutlineSymbol[];
 
-			if (request.symbol || request.kind) {
+			// Check if symbol uses dot notation for hierarchical filtering
+			let symbolsToProcess = documentSymbols;
+			let symbolPattern = request.symbol;
+
+			if (request.symbol?.includes('.')) {
+				// Split into parent.pattern (e.g., "Animation.get*")
+				const parts = request.symbol.split('.');
+				const parentName = parts[0];
+				symbolPattern = parts.slice(1).join('.'); // Handle cases like "Namespace.Class.method*"
+
+				const parentSymbol = this.findSymbolByName(documentSymbols, parentName);
+				if (!parentSymbol) {
+					return { error: `Parent symbol '${parentName}' not found in file` };
+				}
+				// Use only the children of the parent symbol
+				symbolsToProcess = parentSymbol.children || [];
+			}
+
+			if (symbolPattern || request.kind) {
 				// Use filterOutlineSymbols which handles both name and kind filtering
 				symbolData = this.filterOutlineSymbols(
-					documentSymbols,
-					request.symbol || '*', // If no symbol specified, match all
+					symbolsToProcess,
+					symbolPattern || '*', // If no symbol specified, match all
 					false, // Always use pattern matching for outline
 					request.kind
 				);
@@ -186,7 +205,12 @@ export class QueryHandler {
 				}
 			} else {
 				// No filtering - return all symbols
-				symbolData = documentSymbols.map((s) => this.convertDocumentSymbol(s));
+				symbolData = symbolsToProcess.map((s) => this.convertDocumentSymbol(s));
+			}
+
+			// Apply depth limiting if specified
+			if (request.depth) {
+				symbolData = this.limitDepth(symbolData, request.depth);
 			}
 
 			return { result: symbolData };
@@ -402,6 +426,39 @@ export class QueryHandler {
 			message: diag.message,
 			source: diag.source,
 		}));
+	}
+
+	private findSymbolByName(symbols: vscode.DocumentSymbol[], name: string): vscode.DocumentSymbol | undefined {
+		// First check top-level symbols
+		for (const symbol of symbols) {
+			if (symbol.name === name) {
+				return symbol;
+			}
+			// Recursively check children
+			if (symbol.children && symbol.children.length > 0) {
+				const found = this.findSymbolByName(symbol.children, name);
+				if (found) {
+					return found;
+				}
+			}
+		}
+		return undefined;
+	}
+
+	private limitDepth(symbols: OutlineSymbol[], maxDepth: number, currentDepth: number = 1): OutlineSymbol[] {
+		return symbols.map((symbol) => {
+			if (currentDepth >= maxDepth) {
+				// Remove children if we've reached max depth
+				return { ...symbol, children: undefined };
+			} else if (symbol.children) {
+				// Recursively limit depth of children
+				return {
+					...symbol,
+					children: this.limitDepth(symbol.children, maxDepth, currentDepth + 1),
+				};
+			}
+			return symbol;
+		});
 	}
 
 	private parseSymbolKinds(kindString: string): vscode.SymbolKind[] {
