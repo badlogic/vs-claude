@@ -7,10 +7,12 @@ export class TestToolWebviewProvider {
 	private panel: vscode.WebviewPanel | undefined;
 	private queryHandler: QueryHandler;
 	private openHandler: OpenHandler;
+	private workspaceRoot: string | undefined;
 
 	constructor(private context: vscode.ExtensionContext) {
 		this.queryHandler = new QueryHandler();
 		this.openHandler = new OpenHandler();
+		this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 	}
 
 	public show() {
@@ -45,6 +47,7 @@ export class TestToolWebviewProvider {
 							command: 'queryResult',
 							result,
 							queryType: message.queryType,
+							workspaceRoot: this.workspaceRoot,
 						});
 						break;
 					}
@@ -651,16 +654,26 @@ export class TestToolWebviewProvider {
 
     <script>
         const vscode = acquireVsCodeApi();
+        let workspaceRoot = '';
 
         // Initialize
         window.addEventListener('message', event => {
             const message = event.data;
             switch (message.command) {
                 case 'queryResult':
+                    workspaceRoot = message.workspaceRoot || '';
                     handleQueryResult(message.result, message.queryType);
                     break;
             }
         });
+
+        function makeRelativePath(absolutePath) {
+            if (!workspaceRoot || !absolutePath) return absolutePath;
+            if (absolutePath.startsWith(workspaceRoot)) {
+                return absolutePath.substring(workspaceRoot.length + 1);
+            }
+            return absolutePath;
+        }
 
         function formatJson(obj) {
             const json = JSON.stringify(obj, null, 2);
@@ -715,6 +728,12 @@ export class TestToolWebviewProvider {
                 
                 const kindClass = \`symbol-kind-\${symbol.kind.toLowerCase()}\`;
                 const hasChildren = symbol.children && symbol.children.length > 0;
+                
+                // Make display location relative for root level paths
+                if (level === 0 && path) {
+                    const relativePath = makeRelativePath(path);
+                    displayLocation = displayLocation.replace(path, relativePath);
+                }
                 
                 let html = \`<div class="symbol-item" style="margin-left: \${level * 20}px;">
                     <span class="symbol-icon \${kindClass}">\${getSymbolIcon(symbol.kind)}</span>
@@ -949,43 +968,33 @@ export class TestToolWebviewProvider {
         }
 
 
-        // Handle location clicks
+        // Handle clicks
         document.addEventListener('click', (e) => {
+            // Handle location clicks
             if (e.target.classList.contains('location-link')) {
                 const path = e.target.dataset.path;
                 const line = parseInt(e.target.dataset.line);
                 const column = parseInt(e.target.dataset.column);
                 
-                // Auto-fill references/definition/hierarchy forms
-                ['references', 'definition', 'hierarchy'].forEach(type => {
-                    document.getElementById(\`\${type}-path\`).value = path;
-                    document.getElementById(\`\${type}-line\`).value = line;
-                    document.getElementById(\`\${type}-column\`).value = column;
-                });
-            } else if (e.target.classList.contains('symbol-location')) {
-                // Handle clicks on symbol locations in the tree view
-                const path = e.target.dataset.path;
-                const line = parseInt(e.target.dataset.line);
-                const column = parseInt(e.target.dataset.column);
-                
-                // Auto-fill references/definition/hierarchy forms
-                ['references', 'definition', 'hierarchy'].forEach(type => {
-                    document.getElementById(\`\${type}-path\`).value = path;
-                    document.getElementById(\`\${type}-line\`).value = line;
-                    document.getElementById(\`\${type}-column\`).value = column;
-                });
-                
-                // Visual feedback
-                e.target.style.textDecoration = 'underline double';
-                setTimeout(() => {
-                    e.target.style.textDecoration = '';
-                }, 200);
+                if (path && line && column) {
+                    // Auto-fill references/definition/hierarchy forms
+                    ['references', 'definition', 'hierarchy'].forEach(type => {
+                        document.getElementById(\`\${type}-path\`).value = path;
+                        document.getElementById(\`\${type}-line\`).value = line;
+                        document.getElementById(\`\${type}-column\`).value = column;
+                    });
+                    
+                    // Visual feedback for symbol locations
+                    if (e.target.classList.contains('symbol-location')) {
+                        e.target.style.textDecoration = 'underline double';
+                        setTimeout(() => {
+                            e.target.style.textDecoration = '';
+                        }, 200);
+                    }
+                }
             }
-        });
-
-        // Handle kind toggle clicks
-        document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('kind-toggle')) {
+            // Handle kind toggle clicks
+            else if (e.target.classList.contains('kind-toggle')) {
                 e.target.classList.toggle('selected');
             }
         });
