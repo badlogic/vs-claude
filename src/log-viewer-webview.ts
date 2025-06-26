@@ -12,10 +12,15 @@ export class LogViewerWebviewProvider {
 			return;
 		}
 
-		this.panel = vscode.window.createWebviewPanel('vsClaudeLogViewer', 'VS Claude Logs', vscode.ViewColumn.Two, {
-			enableScripts: true,
-			retainContextWhenHidden: true,
-		});
+		this.panel = vscode.window.createWebviewPanel(
+			'vsClaudeLogViewer',
+			'$(output) VS Claude Logs',
+			vscode.ViewColumn.Two,
+			{
+				enableScripts: true,
+				retainContextWhenHidden: true,
+			}
+		);
 
 		this.panel.webview.html = this.getWebviewContent();
 
@@ -67,8 +72,22 @@ export class LogViewerWebviewProvider {
 
         .container {
             padding: 10px 20px;
-            max-width: 1800px;
-            margin: 0 auto;
+            overflow-x: auto;
+        }
+        
+        h1 {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--vscode-foreground);
+        }
+        
+        .logo {
+            width: 24px;
+            height: 24px;
         }
 
         .log-entry {
@@ -76,6 +95,8 @@ export class LogViewerWebviewProvider {
             font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
             font-size: 12px;
             padding: 2px 0;
+            white-space: nowrap;
+            overflow-x: hidden;
         }
 
         .log-entry:last-child {
@@ -83,7 +104,7 @@ export class LogViewerWebviewProvider {
         }
 
         .log-header {
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 8px;
             margin-bottom: 2px;
@@ -130,7 +151,6 @@ export class LogViewerWebviewProvider {
 
         .message {
             color: var(--vscode-editor-foreground);
-            margin-left: 8px;
         }
 
         /* Command styling */
@@ -244,8 +264,19 @@ export class LogViewerWebviewProvider {
     </style>
 </head>
 <body>
-    <div class="container" id="logContainer">
-        <div class="empty-state">Waiting for logs...</div>
+    <div class="container">
+        <h1>
+            <svg class="logo" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L2 7V17L12 22L22 17V7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M12 22V12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M22 7L12 12L2 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M2 17L12 12L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            VS Claude Logs
+        </h1>
+        <div id="logContainer">
+            <div class="empty-state">Waiting for logs...</div>
+        </div>
     </div>
 
     <script>

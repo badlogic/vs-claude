@@ -21,7 +21,7 @@ export class TestToolWebviewProvider {
 
 		this.panel = vscode.window.createWebviewPanel(
 			'vsClaudeTestTool',
-			'VS Claude Query Test Tool',
+			'$(package) VS Claude Test Tool',
 			vscode.ViewColumn.One,
 			{
 				enableScripts: true,
@@ -80,7 +80,7 @@ export class TestToolWebviewProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VS Claude Query Test Tool</title>
+    <title>VS Claude Test Tool</title>
     <style>
         * {
             box-sizing: border-box;
@@ -103,10 +103,18 @@ export class TestToolWebviewProvider {
         }
 
         h1 {
+            display: flex;
+            align-items: center;
+            gap: 12px;
             font-size: 24px;
             font-weight: 600;
             margin-bottom: 24px;
             color: var(--vscode-foreground);
+        }
+        
+        .logo {
+            width: 28px;
+            height: 28px;
         }
 
         .query-sections {
@@ -329,6 +337,74 @@ export class TestToolWebviewProvider {
             color: var(--vscode-descriptionForeground);
         }
 
+        /* Symbol tree styling */
+        .symbol-tree {
+            font-family: var(--vscode-editor-font-family, 'SF Mono', Monaco, monospace);
+            font-size: 12px;
+            line-height: 1.8;
+        }
+
+        .symbol-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 2px 4px;
+            border-radius: 3px;
+            cursor: default;
+            transition: background-color 0.1s;
+        }
+
+        .symbol-item:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+
+        .symbol-icon {
+            font-size: 14px;
+            width: 16px;
+            text-align: center;
+            opacity: 0.8;
+        }
+
+        .symbol-name {
+            font-weight: 500;
+            color: var(--vscode-symbolIcon-textForeground);
+        }
+
+        .symbol-kind {
+            font-size: 10px;
+            padding: 1px 6px;
+            background-color: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
+            border-radius: 3px;
+            text-transform: lowercase;
+        }
+
+        .symbol-location {
+            margin-left: auto;
+            font-size: 11px;
+            opacity: 0.7;
+        }
+
+        /* Symbol kind colors */
+        .symbol-kind-class .symbol-icon { color: var(--vscode-symbolIcon-classForeground); }
+        .symbol-kind-interface .symbol-icon { color: var(--vscode-symbolIcon-interfaceForeground); }
+        .symbol-kind-struct .symbol-icon { color: var(--vscode-symbolIcon-structForeground); }
+        .symbol-kind-enum .symbol-icon { color: var(--vscode-symbolIcon-enumForeground); }
+        .symbol-kind-method .symbol-icon { color: var(--vscode-symbolIcon-methodForeground); }
+        .symbol-kind-function .symbol-icon { color: var(--vscode-symbolIcon-functionForeground); }
+        .symbol-kind-constructor .symbol-icon { color: var(--vscode-symbolIcon-constructorForeground); }
+        .symbol-kind-property .symbol-icon { color: var(--vscode-symbolIcon-propertyForeground); }
+        .symbol-kind-field .symbol-icon { color: var(--vscode-symbolIcon-fieldForeground); }
+        .symbol-kind-variable .symbol-icon { color: var(--vscode-symbolIcon-variableForeground); }
+        .symbol-kind-constant .symbol-icon { color: var(--vscode-symbolIcon-constantForeground); }
+        .symbol-kind-module .symbol-icon { color: var(--vscode-symbolIcon-moduleForeground); }
+        .symbol-kind-namespace .symbol-icon { color: var(--vscode-symbolIcon-namespaceForeground); }
+        .symbol-kind-package .symbol-icon { color: var(--vscode-symbolIcon-packageForeground); }
+        .symbol-kind-enummember .symbol-icon { color: var(--vscode-symbolIcon-enumMemberForeground); }
+        .symbol-kind-string .symbol-icon { color: var(--vscode-symbolIcon-stringForeground); }
+        .symbol-kind-operator .symbol-icon { color: var(--vscode-symbolIcon-operatorForeground); }
+        .symbol-kind-type .symbol-icon { color: var(--vscode-symbolIcon-typeParameterForeground); }
+
         /* Scrollbar */
         ::-webkit-scrollbar {
             width: 10px;
@@ -351,7 +427,15 @@ export class TestToolWebviewProvider {
 </head>
 <body>
     <div class="container">
-        <h1>VS Claude Query Test Tool</h1>
+        <h1>
+            <svg class="logo" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L2 7V17L12 22L22 17V7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M12 22V12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M22 7L12 12L2 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M2 17L12 12L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            VS Claude Test Tool
+        </h1>
         
         <div class="active-context" id="activeContext" style="display: none;">
             <div class="context-item">
@@ -651,6 +735,61 @@ export class TestToolWebviewProvider {
                 // Make file paths clickable in location strings
                 .replace(/\\"([^\\"]+\\.\\w+):(\\d+):(\\d+)\\"/g, '<span class="location-link" data-path="$1" data-line="$2" data-column="$3">"$1:$2:$3"</span>');
         }
+        
+        function formatSymbolTree(symbols, level = 0) {
+            if (!Array.isArray(symbols)) return '';
+            
+            return symbols.map(symbol => {
+                const indent = '  '.repeat(level);
+                const location = symbol.location;
+                // Extract path and position from location string
+                const match = location.match(/^(.+?):(\\d+):(\\d+)/);
+                const path = match ? match[1] : '';
+                const line = match ? match[2] : '1';
+                const column = match ? match[3] : '1';
+                
+                const kindClass = \`symbol-kind-\${symbol.kind.toLowerCase()}\`;
+                const hasChildren = symbol.children && symbol.children.length > 0;
+                
+                let html = \`<div class="symbol-item" style="margin-left: \${level * 20}px;">
+                    <span class="symbol-icon \${kindClass}">\${getSymbolIcon(symbol.kind)}</span>
+                    <span class="symbol-name">\${symbol.name}</span>
+                    <span class="symbol-kind">\${symbol.kind}</span>
+                    <span class="symbol-location location-link" data-path="\${path}" data-line="\${line}" data-column="\${column}">\${location}</span>
+                </div>\`;
+                
+                if (hasChildren) {
+                    html += formatSymbolTree(symbol.children, level + 1);
+                }
+                
+                return html;
+            }).join('');
+        }
+        
+        function getSymbolIcon(kind) {
+            const icons = {
+                'Class': '○',
+                'Interface': '◇',
+                'Struct': '□',
+                'Enum': '∈',
+                'Method': '→',
+                'Function': 'ƒ',
+                'Constructor': '⊕',
+                'Property': '•',
+                'Field': '▪',
+                'Variable': '𝑥',
+                'Constant': '𝐶',
+                'Module': '▣',
+                'Namespace': '◈',
+                'Package': '📦',
+                'EnumMember': '≡',
+                'String': '"',
+                'Null': '∅',
+                'Operator': '±',
+                'Type': '𝑇'
+            };
+            return icons[kind] || '•';
+        }
 
         function handleQueryResult(result, queryType) {
             const resultEl = document.getElementById(\`\${queryType}-result\`);
@@ -661,7 +800,12 @@ export class TestToolWebviewProvider {
                 if (response.error) {
                     resultEl.innerHTML = \`<div class="error-result">Error: \${response.error}</div>\`;
                 } else if (response.result) {
-                    resultEl.innerHTML = formatJson(response.result);
+                    // Special handling for symbols query
+                    if (queryType === 'symbols' && Array.isArray(response.result)) {
+                        resultEl.innerHTML = \`<div class="symbol-tree">\${formatSymbolTree(response.result)}</div>\`;
+                    } else {
+                        resultEl.innerHTML = formatJson(response.result);
+                    }
                 }
             } else {
                 resultEl.innerHTML = '<div class="error-result">No results</div>';
@@ -842,6 +986,24 @@ export class TestToolWebviewProvider {
                     document.getElementById(\`\${type}-line\`).value = line;
                     document.getElementById(\`\${type}-column\`).value = column;
                 });
+            } else if (e.target.classList.contains('symbol-location')) {
+                // Handle clicks on symbol locations in the tree view
+                const path = e.target.dataset.path;
+                const line = parseInt(e.target.dataset.line);
+                const column = parseInt(e.target.dataset.column);
+                
+                // Auto-fill references/definition/hierarchy forms
+                ['references', 'definition', 'hierarchy'].forEach(type => {
+                    document.getElementById(\`\${type}-path\`).value = path;
+                    document.getElementById(\`\${type}-line\`).value = line;
+                    document.getElementById(\`\${type}-column\`).value = column;
+                });
+                
+                // Visual feedback
+                e.target.style.textDecoration = 'underline double';
+                setTimeout(() => {
+                    e.target.style.textDecoration = '';
+                }, 200);
             }
         });
 
