@@ -562,15 +562,18 @@ export class QueryHandler {
 						}
 					} else if (!remainingQuery) {
 						// No more query parts - this is the final match
-						// Apply depth limiting if we're at the query root
-						const sym = this.convertDocumentSymbol(symbol, includeDetails);
-						if (depth && depth > 0) {
-							// Apply depth limiting to the matched symbol
-							const limited = this.limitDepth([sym], depth);
-							result.push(...limited);
-						} else {
-							result.push(sym);
+						// Don't include children since query doesn't ask for them
+						const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
+						const sym: Symbol = {
+							name: symbol.name,
+							detail: symbol.detail,
+							kind: vscode.SymbolKind[symbol.kind],
+							location: this.formatRange(combinedRange),
+						};
+						if (includeDetails && symbol.detail) {
+							sym.type = symbol.detail;
 						}
+						result.push(sym);
 					}
 					// else: query expects more depth but symbol has no children - no match
 				} else if (symbol.children && symbol.children.length > 0) {
@@ -605,15 +608,19 @@ export class QueryHandler {
 				const symbolMatches = fullPathMatches || nameMatches;
 
 				if (symbolMatches) {
-					// Symbol matches: include it with ALL its children (unfiltered)
-					const sym = this.convertDocumentSymbol(symbol, includeDetails);
-					// Apply depth limiting if specified
-					if (depth && depth > 0) {
-						const limited = this.limitDepth([sym], depth);
-						result.push(...limited);
-					} else {
-						result.push(sym);
+					// Symbol matches: include it WITHOUT children (query doesn't ask for them)
+					const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
+					const sym: Symbol = {
+						name: symbol.name,
+						detail: symbol.detail,
+						kind: vscode.SymbolKind[symbol.kind],
+						location: this.formatRange(combinedRange),
+						// Don't include children unless query explicitly asks for them
+					};
+					if (includeDetails && symbol.detail) {
+						sym.type = symbol.detail;
 					}
+					result.push(sym);
 				} else if (symbol.children && symbol.children.length > 0) {
 					// Symbol doesn't match: check if any descendants match
 					const filteredChildren = this.filterSymbols(
