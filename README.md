@@ -88,11 +88,10 @@ MCP Client (Claude) ↔ MCP Server ↔ File System ↔ VS Code Extension
 ### Scripts
 
 ```bash
-npm run build     # Build TypeScript and Go binaries
-npm run check     # Format and lint all code
-npm run typecheck # TypeScript type checking
-npm run test      # Run e2e tests (builds MCP server, compiles tests, launches VS Code)
-npm run clean     # Remove build artifacts
+npm run build  # Build TypeScript and Go binaries
+npm run check  # Format, lint, and type check all code
+npm run test   # Run e2e tests (builds MCP server, compiles tests, launches VS Code)
+npm run clean  # Remove build artifacts
 ```
 
 ### Project Structure
