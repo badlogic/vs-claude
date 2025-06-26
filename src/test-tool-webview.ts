@@ -48,22 +48,6 @@ export class TestToolWebviewProvider {
 						});
 						break;
 					}
-					case 'getActiveFile': {
-						const activeEditor = vscode.window.activeTextEditor;
-						if (activeEditor) {
-							const position = activeEditor.selection.active;
-							const wordRange = activeEditor.document.getWordRangeAtPosition(position);
-							const word = wordRange ? activeEditor.document.getText(wordRange) : '';
-							this.panel?.webview.postMessage({
-								command: 'activeFile',
-								path: activeEditor.document.uri.fsPath,
-								line: position.line + 1,
-								column: position.character + 1,
-								symbol: word,
-							});
-						}
-						break;
-					}
 				}
 			},
 			undefined,
@@ -73,9 +57,6 @@ export class TestToolWebviewProvider {
 		this.panel.onDidDispose(() => {
 			this.panel = undefined;
 		});
-
-		// Request active file info
-		this.panel.webview.postMessage({ command: 'ready' });
 	}
 
 	private getWebviewContent(webview: vscode.Webview): string {
@@ -350,24 +331,6 @@ export class TestToolWebviewProvider {
             margin-top: 4px;
         }
 
-        .active-context {
-            background: var(--vscode-editor-selectionBackground);
-            padding: 12px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-            font-size: 12px;
-        }
-
-        .context-item {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 4px;
-        }
-
-        .context-label {
-            font-weight: 600;
-            color: var(--vscode-descriptionForeground);
-        }
 
         /* Symbol tree styling */
         .symbol-tree {
@@ -465,21 +428,6 @@ export class TestToolWebviewProvider {
             <img class="logo" src="${logoUri}" alt="VS Claude">
             VS Claude Test Tool
         </h1>
-        
-        <div class="active-context" id="activeContext" style="display: none;">
-            <div class="context-item">
-                <span class="context-label">Active File:</span>
-                <span id="contextFile">-</span>
-            </div>
-            <div class="context-item">
-                <span class="context-label">Position:</span>
-                <span id="contextPosition">-</span>
-            </div>
-            <div class="context-item">
-                <span class="context-label">Symbol:</span>
-                <span id="contextSymbol">-</span>
-            </div>
-        </div>
 
         <div class="query-sections">
             <!-- Find Symbols -->
@@ -562,7 +510,6 @@ export class TestToolWebviewProvider {
                 <div class="button-group">
                     <button onclick="runReferencesQuery()">Run Query</button>
                     <button class="secondary" onclick="clearReferences()">Clear</button>
-                    <button class="secondary" onclick="useActivePosition('references')">Use Active</button>
                 </div>
                 
                 <div id="references-result" class="result-container"></div>
@@ -592,7 +539,6 @@ export class TestToolWebviewProvider {
                 <div class="button-group">
                     <button onclick="runDefinitionQuery()">Run Query</button>
                     <button class="secondary" onclick="clearDefinition()">Clear</button>
-                    <button class="secondary" onclick="useActivePosition('definition')">Use Active</button>
                 </div>
                 
                 <div id="definition-result" class="result-container"></div>
@@ -630,7 +576,6 @@ export class TestToolWebviewProvider {
                 <div class="button-group">
                     <button onclick="runHierarchyQuery()">Run Query</button>
                     <button class="secondary" onclick="clearHierarchy()">Clear</button>
-                    <button class="secondary" onclick="useActivePosition('hierarchy')">Use Active</button>
                 </div>
                 
                 <div id="hierarchy-result" class="result-container"></div>
@@ -677,7 +622,6 @@ export class TestToolWebviewProvider {
                 <div class="button-group">
                     <button onclick="runOutlineQuery()">Run Query</button>
                     <button class="secondary" onclick="clearOutline()">Clear</button>
-                    <button class="secondary" onclick="useActiveFile('outline')">Use Active</button>
                 </div>
                 
                 <div id="outline-result" class="result-container"></div>
@@ -698,7 +642,6 @@ export class TestToolWebviewProvider {
                 <div class="button-group">
                     <button onclick="runDiagnosticsQuery()">Run Query</button>
                     <button class="secondary" onclick="clearDiagnostics()">Clear</button>
-                    <button class="secondary" onclick="useActiveFile('diagnostics')">Use Active</button>
                 </div>
                 
                 <div id="diagnostics-result" class="result-container"></div>
@@ -708,39 +651,16 @@ export class TestToolWebviewProvider {
 
     <script>
         const vscode = acquireVsCodeApi();
-        let activeFile = { path: '', line: 1, column: 1, symbol: '' };
 
         // Initialize
         window.addEventListener('message', event => {
             const message = event.data;
             switch (message.command) {
-                case 'ready':
-                    vscode.postMessage({ command: 'getActiveFile' });
-                    break;
-                case 'activeFile':
-                    activeFile = {
-                        path: message.path,
-                        line: message.line,
-                        column: message.column,
-                        symbol: message.symbol
-                    };
-                    updateActiveContext();
-                    break;
                 case 'queryResult':
                     handleQueryResult(message.result, message.queryType);
                     break;
             }
         });
-
-        function updateActiveContext() {
-            const contextEl = document.getElementById('activeContext');
-            if (activeFile.path) {
-                contextEl.style.display = 'block';
-                document.getElementById('contextFile').textContent = activeFile.path.split('/').pop();
-                document.getElementById('contextPosition').textContent = \`\${activeFile.line}:\${activeFile.column}\`;
-                document.getElementById('contextSymbol').textContent = activeFile.symbol || '-';
-            }
-        }
 
         function formatJson(obj) {
             const json = JSON.stringify(obj, null, 2);
@@ -761,14 +681,34 @@ export class TestToolWebviewProvider {
             return symbols.map(symbol => {
                 const indent = '  '.repeat(level);
                 const location = symbol.location;
-                // Extract path and position from location string
-                const match = location.match(/^(.+?):(\\d+):(\\d+)/);
-                const path = match ? match[1] : '';
-                const line = match ? match[2] : '1';
-                const column = match ? match[3] : '1';
                 
-                // For root level, show full path; for children, show line:column
-                const displayLocation = level === 0 ? location : location.replace(/^[^:]+:/, '');
+                // Parse location - can be either "path:line:col-endLine:endCol" or "line:col-endLine:endCol"
+                let path, line, column, displayLocation;
+                
+                // Try to match full path format first
+                let match = location.match(/^(.+?):(\d+):(\d+)-\d+:\d+$/);
+                if (match) {
+                    // Has full path
+                    path = match[1];
+                    line = match[2];
+                    column = match[3];
+                    displayLocation = location;
+                } else {
+                    // Try range-only format (no path)
+                    match = location.match(/^(\d+):(\d+)-\d+:\d+$/);
+                    if (match) {
+                        path = rootPath || '';
+                        line = match[1];
+                        column = match[2];
+                        displayLocation = location;
+                    } else {
+                        // Fallback
+                        path = rootPath || '';
+                        line = '1';
+                        column = '1';
+                        displayLocation = location;
+                    }
+                }
                 
                 // Set rootPath for children if this is root level
                 const currentRootPath = level === 0 ? path : rootPath;
@@ -780,7 +720,7 @@ export class TestToolWebviewProvider {
                     <span class="symbol-icon \${kindClass}">\${getSymbolIcon(symbol.kind)}</span>
                     <span class="symbol-name">\${symbol.name}</span>
                     <span class="symbol-kind">\${symbol.kind}</span>
-                    <span class="symbol-location location-link" data-path="\${currentRootPath || path}" data-line="\${line}" data-column="\${column}">\${displayLocation}</span>
+                    <span class="symbol-location location-link" data-path="\${path}" data-line="\${line}" data-column="\${column}">\${displayLocation}</span>
                 </div>\`;
                 
                 if (hasChildren) {
@@ -1008,31 +948,6 @@ export class TestToolWebviewProvider {
             document.getElementById('diagnostics-result').classList.remove('visible');
         }
 
-        // Use active position/file
-        function useActivePosition(type) {
-            if (!activeFile.path) {
-                alert('No active file');
-                return;
-            }
-            
-            document.getElementById(\`\${type}-path\`).value = activeFile.path;
-            if (type !== 'outline' && type !== 'diagnostics') {
-                document.getElementById(\`\${type}-line\`).value = activeFile.line;
-                document.getElementById(\`\${type}-column\`).value = activeFile.column;
-            }
-        }
-
-        function useActiveFile(type) {
-            if (!activeFile.path) {
-                alert('No active file');
-                return;
-            }
-            
-            document.getElementById(\`\${type}-path\`).value = activeFile.path;
-            if (type === 'outline' && activeFile.symbol) {
-                document.getElementById('outline-symbol').value = activeFile.symbol;
-            }
-        }
 
         // Handle location clicks
         document.addEventListener('click', (e) => {
@@ -1074,9 +989,6 @@ export class TestToolWebviewProvider {
                 e.target.classList.toggle('selected');
             }
         });
-
-        // Request active file on load
-        vscode.postMessage({ command: 'getActiveFile' });
     </script>
 </body>
 </html>`;
