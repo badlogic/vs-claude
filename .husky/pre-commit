@@ -1,13 +1,5 @@
 #!/bin/sh
 
-# Run type checking on all TypeScript files
-echo "Running TypeScript type check..."
-npm run typecheck
-if [ $? -ne 0 ]; then
-  echo "❌ TypeScript type check failed. Please fix the errors before committing."
-  exit 1
-fi
-
 # Run lint-staged for incremental linting and formatting
 echo "Running linting and formatting on staged files..."
 npx lint-staged

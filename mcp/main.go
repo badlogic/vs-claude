@@ -52,7 +52,7 @@ func main() {
 	// Register open tool
 	mcpServer.AddTool(
 		mcp.NewTool("open",
-			mcp.WithDescription(`Open files, diffs, or symbols in VS Code.
+			mcp.WithDescription(`Open files and diffs in VS Code.
 
 Basic usage:
 - Single item: {"type": "file", "path": "/path/to/file.ts"}
@@ -75,16 +75,9 @@ Git diff examples:
 - Branch diff: {"type": "gitDiff", "path": "/path/to/file.ts", "from": "main", "to": "feature-branch"}
 - With context: {"type": "gitDiff", "path": "/path/to/file.ts", "from": "HEAD", "to": "working", "context": 10}
 
-Symbol examples:
-- Search workspace: {"type": "symbol", "query": "handleRequest"}
-- Search in file: {"type": "symbol", "query": "processData", "path": "/path/to/utils.ts"}
-- Find class: {"type": "symbol", "query": "UserService"}
-- Find interface: {"type": "symbol", "query": "IConfig"}
-
 Notes:
 - All paths must be absolute
 - startLine/endLine are optional and 1-based
-- Symbol search is case-sensitive exact match
 - Git diff works even if file doesn't exist in one revision (shows as added/deleted)
 - Multiple VS Code windows: the extension will prompt which window to use`),
 			mcp.WithObject("args",

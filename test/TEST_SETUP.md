@@ -19,10 +19,7 @@ test/
 ## Configuration
 
 ### package.json Scripts
-- `npm test` - Run all tests
-- `npm run test:unit` - Run unit tests only
-- `npm run test:integration` - Run integration tests
-- `npm run test:compile` - Compile test TypeScript files
+- `npm test` - Run all tests (builds first, then runs tests)
 
 ### TypeScript Configuration
 - `tsconfig.test.json` - Separate TypeScript config for tests
@@ -70,11 +67,8 @@ test('Should handle errors gracefully', async () => {
 # Install dependencies
 npm install
 
-# Compile and run tests
+# Build and run tests
 npm test
-
-# Run only unit tests (after compilation)
-npm run test:unit
 ```
 
 ### Debugging Tests
