@@ -9,9 +9,21 @@ export enum LogLevel {
 	ERROR = 3,
 }
 
+export interface LogEntry {
+	timestamp: string;
+	level: LogLevel;
+	levelStr: string;
+	component: string;
+	message: string;
+	args?: unknown[];
+}
+
 class Logger {
 	private outputChannel: vscode.OutputChannel;
 	private logLevel: LogLevel = LogLevel.INFO;
+	private logs: LogEntry[] = [];
+	private logListeners: Array<(log: LogEntry) => void> = [];
+	private maxLogs = 1000;
 
 	constructor() {
 		this.outputChannel = vscode.window.createOutputChannel('VS Claude');
@@ -84,8 +96,28 @@ class Logger {
 			return;
 		}
 
+		// Create log entry
+		const logEntry: LogEntry = {
+			timestamp: this.formatTimestamp(),
+			level,
+			levelStr: this.formatLevel(level).trim(),
+			component,
+			message,
+			args: args.length > 0 ? args : undefined,
+		};
+
+		// Store in memory (with limit)
+		this.logs.push(logEntry);
+		if (this.logs.length > this.maxLogs) {
+			this.logs.shift();
+		}
+
+		// Notify listeners
+		this.logListeners.forEach((listener) => listener(logEntry));
+
+		// Output to channel (plain text)
 		const formattedMessage = this.formatMessage(level, component, message, ...args);
-		this.outputChannel.appendLine(formattedMessage);
+		this.outputChannel.appendLine(this.stripAnsi(formattedMessage));
 
 		// Also log to console in development
 		if (process.env.NODE_ENV === 'development' || level === LogLevel.ERROR) {
@@ -150,6 +182,36 @@ class Logger {
 		const detailStr = details ? chalk.gray(` - ${details}`) : '';
 		this.info('Query', `${formattedType}${detailStr}`);
 	}
+
+	// Get stored logs
+	getLogs(): LogEntry[] {
+		return [...this.logs];
+	}
+
+	// Clear stored logs
+	clearLogs(): void {
+		this.logs = [];
+		this.outputChannel.clear();
+	}
+
+	// Subscribe to log events
+	onDidLog(listener: (log: LogEntry) => void): vscode.Disposable {
+		this.logListeners.push(listener);
+		return {
+			dispose: () => {
+				const index = this.logListeners.indexOf(listener);
+				if (index > -1) {
+					this.logListeners.splice(index, 1);
+				}
+			},
+		};
+	}
+
+	// Strip ANSI color codes for output channel
+	private stripAnsi(str: string): string {
+		// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape codes are control characters
+		return str.replace(/\x1b\[[0-9;]*m/g, '');
+	}
 }
 
 // Export singleton instance
@@ -157,8 +219,11 @@ export const logger = new Logger();
 
 // Helper functions for common logging patterns
 export function logCommand(action: string, args?: unknown): void {
-	const argsStr = args ? chalk.gray(` with ${JSON.stringify(args)}`) : '';
-	logger.info('Command', `${chalk.green(action)}${argsStr}`);
+	const argsStr = args ? ` with args` : '';
+	logger.info('Command', `${chalk.green(action)}${chalk.gray(argsStr)}`);
+	if (args) {
+		logger.debug('Command', 'Args:', args);
+	}
 }
 
 export function logResult(action: string, success: boolean, details?: string): void {

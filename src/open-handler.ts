@@ -41,6 +41,19 @@ type OpenArgs = OpenItem | OpenItem[];
 
 export class OpenHandler {
 	async execute(args: OpenArgs): Promise<{ success: boolean; error?: string }> {
+		// Log the open command
+		if (Array.isArray(args)) {
+			logger.info('OpenHandler', `Opening ${args.length} items`);
+		} else {
+			const type =
+				args.type === 'file'
+					? `file ${args.path}`
+					: args.type === 'diff'
+						? `diff ${args.left} ↔ ${args.right}`
+						: `git diff ${args.path} (${args.from} → ${args.to})`;
+			logger.info('OpenHandler', `Opening ${type}`);
+		}
+
 		// Normalize to array of items
 		let items: OpenItem[];
 
@@ -137,6 +150,7 @@ export class OpenHandler {
 
 	private async openFile(item: OpenFileItem): Promise<void> {
 		const uri = vscode.Uri.file(item.path);
+		logger.debug('OpenHandler', `Opening file: ${item.path}`);
 		const doc = await vscode.workspace.openTextDocument(uri);
 
 		// Use the preview property from the item, defaulting to false
@@ -206,6 +220,7 @@ export class OpenHandler {
 	private async openDiff(item: OpenDiffItem): Promise<void> {
 		const leftUri = vscode.Uri.file(item.left);
 		const rightUri = vscode.Uri.file(item.right);
+		logger.debug('OpenHandler', `Opening diff: ${item.left} ↔ ${item.right}`);
 
 		await vscode.commands.executeCommand(
 			'vscode.diff',
@@ -217,6 +232,8 @@ export class OpenHandler {
 	}
 
 	private async openGitDiff(item: OpenGitDiffItem): Promise<void> {
+		logger.debug('OpenHandler', `Opening git diff: ${item.path} (${item.from} → ${item.to})`);
+
 		// Get git extension
 		const gitExtension = vscode.extensions.getExtension<GitExtension>('vscode.git');
 		if (!gitExtension) {
@@ -283,9 +300,10 @@ export class OpenHandler {
 		const fileUri = vscode.Uri.file(item.path);
 
 		// Log available repositories for debugging
-		// Only log if we have multiple repos or none
-		if (repos.length === 0 || repos.length > 1) {
-			logger.debug('OpenHandler', `Git repositories found: ${repos.length}`);
+		if (repos.length === 0) {
+			logger.warn('OpenHandler', 'No git repositories found');
+		} else if (repos.length > 1) {
+			logger.debug('OpenHandler', `Multiple git repositories found: ${repos.length}`);
 		}
 
 		const repo = repos.find((r) => fileUri.path.startsWith(r.rootUri.path));
@@ -322,7 +340,7 @@ export class OpenHandler {
 			}
 
 			// Log the URIs for debugging
-			// Debug logging removed - URIs are already visible in the command
+			// Create URIs for diff
 		} catch (error) {
 			throw new Error(`Failed to create git URIs: ${error}`);
 		}

@@ -33,8 +33,12 @@
         "title": "VS Claude: Uninstall MCP"
       },
       {
-        "command": "vs-claude.testQuery",
-        "title": "VS Claude: Test Query Tool"
+        "command": "vs-claude.testTool",
+        "title": "VS Claude: Test Tool"
+      },
+      {
+        "command": "vs-claude.showLogs",
+        "title": "VS Claude: Show Logs (Colored)"
       }
     ]
   },

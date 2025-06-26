@@ -129,6 +129,9 @@ export class QueryHandler {
 	}
 
 	private async executeSingle(request: QueryRequest): Promise<QueryResponse> {
+		// Log the query type
+		logger.info('QueryHandler', `Executing ${request.type} query`);
+
 		try {
 			switch (request.type) {
 				case 'symbols':
@@ -194,7 +197,13 @@ export class QueryHandler {
 
 			// Handle countOnly
 			if (request.countOnly && 'result' in result) {
-				return { result: { count: result.result.length } };
+				const count = result.result.length;
+				logger.info('QueryHandler', `Symbol count: ${count}`);
+				return { result: { count } };
+			}
+
+			if ('result' in result) {
+				logger.info('QueryHandler', `Found ${result.result.length} symbols`);
 			}
 
 			return result;
@@ -387,6 +396,7 @@ export class QueryHandler {
 				}
 			}
 
+			logger.info('QueryHandler', `Found ${diagnostics.length} diagnostics`);
 			return { result: diagnostics };
 		} catch (error) {
 			logger.error('QueryHandler', `Failed to get diagnostics: ${error}`);
@@ -426,6 +436,7 @@ export class QueryHandler {
 				})
 			);
 
+			logger.info('QueryHandler', `Found ${referencesWithPreview.length} references`);
 			return { result: referencesWithPreview };
 		} catch (error) {
 			logger.error('QueryHandler', `Failed to find references: ${error}`);
@@ -636,6 +647,7 @@ export class QueryHandler {
 				})
 			);
 
+			logger.info('QueryHandler', `Found ${results.length} definitions`);
 			return { result: results };
 		} catch (error) {
 			logger.error('QueryHandler', `Failed to find definition: ${error}`);
@@ -797,6 +809,7 @@ export class QueryHandler {
 				}
 			}
 
+			logger.info('QueryHandler', `Found ${results.length} type hierarchy items`);
 			return { result: results };
 		} catch (error) {
 			// Type hierarchy might not be supported by the language server

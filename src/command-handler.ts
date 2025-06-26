@@ -25,6 +25,10 @@ export class CommandHandler {
 	}
 
 	async executeCommand(command: Command): Promise<{ success: boolean; data?: unknown; error?: string }> {
+		// Log the incoming command
+		logger.info('CommandHandler', `Received command: ${command.tool}`);
+		logger.debug('CommandHandler', 'Command args:', command.args);
+
 		try {
 			let result: { success: boolean; data?: unknown; error?: string };
 
@@ -53,6 +57,16 @@ export class CommandHandler {
 
 			// Log command result
 			logger.command(command.tool, result.success);
+
+			if (result.success) {
+				logger.info('CommandHandler', `Command ${command.tool} completed successfully`);
+				if (result.data) {
+					logger.debug('CommandHandler', 'Result data:', result.data);
+				}
+			} else {
+				logger.error('CommandHandler', `Command ${command.tool} failed: ${result.error}`);
+			}
+
 			return result;
 		} catch (error) {
 			const errorMessage = `Command execution error: ${error}`;
