@@ -21,15 +21,16 @@ export class TestToolWebviewProvider {
 
 		this.panel = vscode.window.createWebviewPanel(
 			'vsClaudeTestTool',
-			'$(package) VS Claude Test Tool',
+			'VS Claude Test Tool',
 			vscode.ViewColumn.One,
 			{
 				enableScripts: true,
 				retainContextWhenHidden: true,
+				localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, '')],
 			}
 		);
 
-		this.panel.webview.html = this.getWebviewContent();
+		this.panel.webview.html = this.getWebviewContent(this.panel.webview);
 
 		this.panel.webview.onDidReceiveMessage(
 			async (message) => {
@@ -74,7 +75,9 @@ export class TestToolWebviewProvider {
 		this.panel.webview.postMessage({ command: 'ready' });
 	}
 
-	private getWebviewContent(): string {
+	private getWebviewContent(webview: vscode.Webview): string {
+		const logoUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'logo.png'));
+
 		return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -241,8 +244,29 @@ export class TestToolWebviewProvider {
             transition: background-color 0.2s;
         }
 
-        button:hover {
+        button:hover:not(:disabled) {
             background: var(--vscode-button-hoverBackground);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        button.loading::after {
+            content: "";
+            width: 12px;
+            height: 12px;
+            margin-left: 8px;
+            border: 2px solid transparent;
+            border-top-color: currentColor;
+            border-radius: 50%;
+            display: inline-block;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
         button.secondary {
@@ -250,7 +274,7 @@ export class TestToolWebviewProvider {
             color: var(--vscode-button-secondaryForeground);
         }
 
-        button.secondary:hover {
+        button.secondary:hover:not(:disabled) {
             background: var(--vscode-button-secondaryHoverBackground);
         }
 
@@ -342,6 +366,7 @@ export class TestToolWebviewProvider {
             font-family: var(--vscode-editor-font-family, 'SF Mono', Monaco, monospace);
             font-size: 12px;
             line-height: 1.8;
+            overflow-x: auto;
         }
 
         .symbol-item {
@@ -352,6 +377,7 @@ export class TestToolWebviewProvider {
             border-radius: 3px;
             cursor: default;
             transition: background-color 0.1s;
+            white-space: nowrap;
         }
 
         .symbol-item:hover {
@@ -428,12 +454,7 @@ export class TestToolWebviewProvider {
 <body>
     <div class="container">
         <h1>
-            <svg class="logo" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2L2 7V17L12 22L22 17V7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M12 22V12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M22 7L12 12L2 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M2 17L12 12L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+            <img class="logo" src="${logoUri}" alt="VS Claude">
             VS Claude Test Tool
         </h1>
         
@@ -736,7 +757,7 @@ export class TestToolWebviewProvider {
                 .replace(/\\"([^\\"]+\\.\\w+):(\\d+):(\\d+)\\"/g, '<span class="location-link" data-path="$1" data-line="$2" data-column="$3">"$1:$2:$3"</span>');
         }
         
-        function formatSymbolTree(symbols, level = 0) {
+        function formatSymbolTree(symbols, level = 0, rootPath = null) {
             if (!Array.isArray(symbols)) return '';
             
             return symbols.map(symbol => {
@@ -748,6 +769,12 @@ export class TestToolWebviewProvider {
                 const line = match ? match[2] : '1';
                 const column = match ? match[3] : '1';
                 
+                // For root level, show full path; for children, show line:column
+                const displayLocation = level === 0 ? location : location.replace(/^[^:]+:/, '');
+                
+                // Set rootPath for children if this is root level
+                const currentRootPath = level === 0 ? path : rootPath;
+                
                 const kindClass = \`symbol-kind-\${symbol.kind.toLowerCase()}\`;
                 const hasChildren = symbol.children && symbol.children.length > 0;
                 
@@ -755,11 +782,11 @@ export class TestToolWebviewProvider {
                     <span class="symbol-icon \${kindClass}">\${getSymbolIcon(symbol.kind)}</span>
                     <span class="symbol-name">\${symbol.name}</span>
                     <span class="symbol-kind">\${symbol.kind}</span>
-                    <span class="symbol-location location-link" data-path="\${path}" data-line="\${line}" data-column="\${column}">\${location}</span>
+                    <span class="symbol-location location-link" data-path="\${currentRootPath || path}" data-line="\${line}" data-column="\${column}">\${displayLocation}</span>
                 </div>\`;
                 
                 if (hasChildren) {
-                    html += formatSymbolTree(symbol.children, level + 1);
+                    html += formatSymbolTree(symbol.children, level + 1, currentRootPath);
                 }
                 
                 return html;
@@ -795,6 +822,13 @@ export class TestToolWebviewProvider {
             const resultEl = document.getElementById(\`\${queryType}-result\`);
             if (!resultEl) return;
 
+            // Clear loading state from button
+            const section = resultEl.closest('.query-section');
+            const button = section.querySelector('button.loading');
+            if (button) {
+                setButtonLoading(button, false);
+            }
+
             if (Array.isArray(result) && result.length > 0) {
                 const response = result[0];
                 if (response.error) {
@@ -815,7 +849,26 @@ export class TestToolWebviewProvider {
         }
 
         // Query functions
+        function setButtonLoading(button, loading) {
+            if (loading) {
+                button.disabled = true;
+                button.classList.add('loading');
+                // Disable all buttons in the same section
+                const section = button.closest('.query-section');
+                section.querySelectorAll('button').forEach(btn => btn.disabled = true);
+            } else {
+                button.disabled = false;
+                button.classList.remove('loading');
+                // Re-enable all buttons in the same section
+                const section = button.closest('.query-section');
+                section.querySelectorAll('button').forEach(btn => btn.disabled = false);
+            }
+        }
+
         function runSymbolsQuery() {
+            const button = event.target;
+            setButtonLoading(button, true);
+            
             const query = document.getElementById('symbols-query').value || '*';
             const path = document.getElementById('symbols-path').value;
             const exclude = document.getElementById('symbols-exclude').value;
@@ -836,6 +889,7 @@ export class TestToolWebviewProvider {
         }
 
         function runReferencesQuery() {
+            const button = event.target;
             const path = document.getElementById('references-path').value;
             const line = parseInt(document.getElementById('references-line').value);
             const column = parseInt(document.getElementById('references-column').value);
@@ -845,11 +899,13 @@ export class TestToolWebviewProvider {
                 return;
             }
             
+            setButtonLoading(button, true);
             const request = { type: 'references', path, line, column };
             vscode.postMessage({ command: 'runQuery', query: request, queryType: 'references' });
         }
 
         function runDefinitionQuery() {
+            const button = event.target;
             const path = document.getElementById('definition-path').value;
             const line = parseInt(document.getElementById('definition-line').value);
             const column = parseInt(document.getElementById('definition-column').value);
@@ -859,11 +915,13 @@ export class TestToolWebviewProvider {
                 return;
             }
             
+            setButtonLoading(button, true);
             const request = { type: 'definition', path, line, column };
             vscode.postMessage({ command: 'runQuery', query: request, queryType: 'definition' });
         }
 
         function runHierarchyQuery() {
+            const button = event.target;
             const type = document.getElementById('hierarchy-type').value;
             const path = document.getElementById('hierarchy-path').value;
             const line = parseInt(document.getElementById('hierarchy-line').value);
@@ -874,11 +932,13 @@ export class TestToolWebviewProvider {
                 return;
             }
             
+            setButtonLoading(button, true);
             const request = { type, path, line, column };
             vscode.postMessage({ command: 'runQuery', query: request, queryType: 'hierarchy' });
         }
 
         function runOutlineQuery() {
+            const button = event.target;
             const path = document.getElementById('outline-path').value;
             const symbol = document.getElementById('outline-symbol').value;
             const kind = document.getElementById('outline-kind').value;
@@ -888,6 +948,7 @@ export class TestToolWebviewProvider {
                 return;
             }
             
+            setButtonLoading(button, true);
             const request = { type: 'symbols', path };
             if (symbol) request.query = symbol;
             if (kind) request.kinds = [kind];
@@ -896,8 +957,10 @@ export class TestToolWebviewProvider {
         }
 
         function runDiagnosticsQuery() {
+            const button = event.target;
             const path = document.getElementById('diagnostics-path').value;
             
+            setButtonLoading(button, true);
             const request = { type: 'diagnostics' };
             if (path) request.path = path;
             

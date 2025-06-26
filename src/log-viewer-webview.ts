@@ -12,17 +12,13 @@ export class LogViewerWebviewProvider {
 			return;
 		}
 
-		this.panel = vscode.window.createWebviewPanel(
-			'vsClaudeLogViewer',
-			'$(output) VS Claude Logs',
-			vscode.ViewColumn.Two,
-			{
-				enableScripts: true,
-				retainContextWhenHidden: true,
-			}
-		);
+		this.panel = vscode.window.createWebviewPanel('vsClaudeLogViewer', 'VS Claude Logs', vscode.ViewColumn.Two, {
+			enableScripts: true,
+			retainContextWhenHidden: true,
+			localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, '')],
+		});
 
-		this.panel.webview.html = this.getWebviewContent();
+		this.panel.webview.html = this.getWebviewContent(this.panel.webview);
 
 		// Send current logs
 		this.panel.webview.postMessage({
@@ -48,7 +44,9 @@ export class LogViewerWebviewProvider {
 		);
 	}
 
-	private getWebviewContent(): string {
+	private getWebviewContent(webview: vscode.Webview): string {
+		const logoUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'logo.png'));
+
 		return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -90,30 +88,47 @@ export class LogViewerWebviewProvider {
             height: 24px;
         }
 
-        .log-entry {
-            margin-bottom: 4px;
+        .log-table {
             font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
             font-size: 12px;
-            padding: 2px 0;
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        .log-row {
+            display: table-row;
             white-space: nowrap;
-            overflow-x: hidden;
         }
 
-        .log-entry:last-child {
-            border-bottom: none;
+        .log-cell {
+            display: table-cell;
+            padding: 2px 8px 2px 0;
+            vertical-align: top;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        .log-header {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 2px;
-        }
-
-        .timestamp {
+        .timestamp-cell {
+            width: 85px;
             color: var(--vscode-descriptionForeground);
             opacity: 0.7;
             font-size: 11px;
+        }
+
+        .level-cell {
+            width: 50px;
+            text-align: center;
+        }
+
+        .component-cell {
+            width: 140px;
+            color: var(--vscode-symbolIcon-namespaceForeground, #4EC9B0);
+            font-weight: 500;
+        }
+
+        .message-cell {
+            width: auto;
+            padding-right: 0;
         }
 
         .level {
@@ -122,6 +137,7 @@ export class LogViewerWebviewProvider {
             padding: 2px 6px;
             border-radius: 3px;
             text-transform: uppercase;
+            display: inline-block;
         }
 
         .level.debug {
@@ -142,15 +158,6 @@ export class LogViewerWebviewProvider {
         .level.error {
             background: rgba(215, 58, 73, 0.2);
             color: #D73A49;
-        }
-
-        .component {
-            color: var(--vscode-symbolIcon-namespaceForeground, #4EC9B0);
-            font-weight: 500;
-        }
-
-        .message {
-            color: var(--vscode-editor-foreground);
         }
 
         /* Command styling */
@@ -266,12 +273,7 @@ export class LogViewerWebviewProvider {
 <body>
     <div class="container">
         <h1>
-            <svg class="logo" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2L2 7V17L12 22L22 17V7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M12 22V12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M22 7L12 12L2 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M2 17L12 12L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+            <img class="logo" src="${logoUri}" alt="VS Claude">
             VS Claude Logs
         </h1>
         <div id="logContainer">
@@ -342,15 +344,14 @@ export class LogViewerWebviewProvider {
                 }
             }
 
+            const messageWithArgs = formatMessage(log.message, log.level) + (argsHtml ? argsHtml : '');
+
             return \`
-                <div class="log-entry">
-                    <div class="log-header">
-                        <span class="timestamp">\${formatTimestamp(log.timestamp)}</span>
-                        <span class="level \${levelClass}">\${log.levelStr}</span>
-                        <span class="component">\${log.component}</span>
-                        <span class="message">\${formatMessage(log.message, log.level)}</span>
-                    </div>
-                    \${argsHtml}
+                <div class="log-row">
+                    <div class="log-cell timestamp-cell">\${formatTimestamp(log.timestamp)}</div>
+                    <div class="log-cell level-cell"><span class="level \${levelClass}">\${log.levelStr}</span></div>
+                    <div class="log-cell component-cell">\${log.component}</div>
+                    <div class="log-cell message-cell">\${messageWithArgs}</div>
                 </div>
             \`;
         }
@@ -363,7 +364,7 @@ export class LogViewerWebviewProvider {
                 return;
             }
 
-            container.innerHTML = logs.map(log => createLogEntry(log)).join('');
+            container.innerHTML = '<div class="log-table">' + logs.map(log => createLogEntry(log)).join('') + '</div>';
             
             // Auto-scroll to bottom
             window.scrollTo(0, document.body.scrollHeight);
