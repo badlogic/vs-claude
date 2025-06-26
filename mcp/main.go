@@ -113,7 +113,7 @@ QUERY TYPES:
    Parameters:
    - query: Pattern to match (default: "*"). Supports wildcards and hierarchy
    - path: File or folder to search in (default: workspace)
-   - kinds: Filter leaf nodes matching query by symbol type ["class", "method", "function", "interface", "enum", "property", "variable", "namespace", "type"]
+   - kinds: Filter leaf nodes matching query by symbol type ["module", "namespace", "package", "class", "method", "property", "field", "constructor", "enum", "interface", "function", "variable", "constant", "string", "null", "enummember", "struct", "operator", "type"]
    - exclude: Glob path patterns to exclude ["**/test/**", "**/*.spec.ts"]
    - countOnly: Return count of matched leaf nodes only
 

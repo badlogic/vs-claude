@@ -390,13 +390,24 @@ export class TestToolWebviewProvider {
                     <label>Symbol Kinds (optional)</label>
                     <div class="multi-select">
                         <label class="kind-checkbox"><input type="checkbox" value="class"> Class</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="interface"> Interface</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="struct"> Struct</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="enum"> Enum</label>
                         <label class="kind-checkbox"><input type="checkbox" value="method"> Method</label>
                         <label class="kind-checkbox"><input type="checkbox" value="function"> Function</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="constructor"> Constructor</label>
                         <label class="kind-checkbox"><input type="checkbox" value="property"> Property</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="interface"> Interface</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="field"> Field</label>
                         <label class="kind-checkbox"><input type="checkbox" value="variable"> Variable</label>
                         <label class="kind-checkbox"><input type="checkbox" value="constant"> Constant</label>
-                        <label class="kind-checkbox"><input type="checkbox" value="enum"> Enum</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="module"> Module</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="namespace"> Namespace</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="package"> Package</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="enummember"> Enum Member</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="string"> String</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="null"> Null</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="operator"> Operator</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="type"> Type</label>
                     </div>
                 </div>
                 
@@ -538,12 +549,25 @@ export class TestToolWebviewProvider {
                     <label for="outline-kind">Symbol Kind (optional)</label>
                     <select id="outline-kind">
                         <option value="">All</option>
-                        <option value="method">Methods</option>
-                        <option value="property">Properties</option>
-                        <option value="field">Fields</option>
                         <option value="class">Classes</option>
                         <option value="interface">Interfaces</option>
+                        <option value="struct">Structs</option>
+                        <option value="enum">Enums</option>
+                        <option value="method">Methods</option>
                         <option value="function">Functions</option>
+                        <option value="constructor">Constructors</option>
+                        <option value="property">Properties</option>
+                        <option value="field">Fields</option>
+                        <option value="variable">Variables</option>
+                        <option value="constant">Constants</option>
+                        <option value="module">Modules</option>
+                        <option value="namespace">Namespaces</option>
+                        <option value="package">Packages</option>
+                        <option value="enummember">Enum Members</option>
+                        <option value="string">Strings</option>
+                        <option value="null">Nulls</option>
+                        <option value="operator">Operators</option>
+                        <option value="type">Types</option>
                     </select>
                 </div>
                 
