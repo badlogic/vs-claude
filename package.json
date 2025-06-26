@@ -5,6 +5,10 @@
   "version": "0.0.1",
   "publisher": "vs-claude",
   "icon": "logo.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/badlogic/vs-claude"
+  },
   "engines": {
     "vscode": "^1.74.0"
   },
