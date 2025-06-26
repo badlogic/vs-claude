@@ -66,17 +66,16 @@ export class LogViewerWebviewProvider {
         }
 
         .container {
-            padding: 20px;
-            max-width: 1600px;
+            padding: 10px 20px;
+            max-width: 1800px;
             margin: 0 auto;
         }
 
         .log-entry {
-            margin-bottom: 20px;
+            margin-bottom: 4px;
             font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
             font-size: 12px;
-            border-bottom: 1px solid var(--vscode-panel-border);
-            padding-bottom: 20px;
+            padding: 2px 0;
         }
 
         .log-entry:last-child {
@@ -86,8 +85,8 @@ export class LogViewerWebviewProvider {
         .log-header {
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin-bottom: 8px;
+            gap: 8px;
+            margin-bottom: 2px;
         }
 
         .timestamp {
@@ -131,8 +130,7 @@ export class LogViewerWebviewProvider {
 
         .message {
             color: var(--vscode-editor-foreground);
-            line-height: 1.6;
-            margin: 4px 0;
+            margin-left: 8px;
         }
 
         /* Command styling */
@@ -170,12 +168,12 @@ export class LogViewerWebviewProvider {
             background: var(--vscode-textBlockQuote-background, rgba(255, 255, 255, 0.05));
             border: 1px solid var(--vscode-textBlockQuote-border, rgba(255, 255, 255, 0.1));
             border-radius: 4px;
-            padding: 12px;
-            margin: 8px 0;
+            padding: 8px;
+            margin: 4px 0 4px 20px;
             overflow-x: auto;
             font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-            font-size: 12px;
-            line-height: 1.4;
+            font-size: 11px;
+            line-height: 1.3;
         }
 
         .json-key {
@@ -206,15 +204,16 @@ export class LogViewerWebviewProvider {
 
         /* Tool-specific styling */
         .tool-section {
-            margin: 8px 0;
+            margin: 2px 0;
         }
 
         .tool-label {
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 600;
             color: var(--vscode-descriptionForeground);
             text-transform: uppercase;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
+            margin-left: 20px;
         }
 
         .empty-state {
@@ -318,8 +317,8 @@ export class LogViewerWebviewProvider {
                         <span class="timestamp">\${formatTimestamp(log.timestamp)}</span>
                         <span class="level \${levelClass}">\${log.levelStr}</span>
                         <span class="component">\${log.component}</span>
+                        <span class="message">\${formatMessage(log.message, log.level)}</span>
                     </div>
-                    <div class="message">\${formatMessage(log.message, log.level)}</div>
                     \${argsHtml}
                 </div>
             \`;
