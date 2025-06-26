@@ -365,14 +365,7 @@ export class QueryHandler {
 					}
 
 					if (type === vscode.FileType.File) {
-						// Only process files with known language extensions
-						if (
-							name.match(
-								/\.(ts|tsx|js|jsx|py|java|cpp|hpp|c|h|cs|go|rs|rb|php|swift|kt|scala|ml|hs|clj|ex|elm|r|jl|dart|vue|svelte)$/i
-							)
-						) {
-							files.push(childUri);
-						}
+						files.push(childUri);
 					} else if (type === vscode.FileType.Directory) {
 						// Skip common non-source directories
 						if (!name.match(/^\.|node_modules|vendor|target|dist|build|out|bin|obj|\.git$/)) {
