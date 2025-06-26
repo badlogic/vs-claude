@@ -12,11 +12,17 @@ async function main() {
         // Passed to --extensionTestsPath
         const extensionTestsPath = path.resolve(__dirname, './suite/index');
 
-        // Launch configuration - use our project as the workspace
+        // The test workspace path - use absolute path to compiled location
+        const testWorkspacePath = path.resolve(__dirname, './test-workspace');
+        console.log('Test workspace path:', testWorkspacePath);
+        console.log('Test workspace exists:', require('fs').existsSync(testWorkspacePath));
+        
+        // Launch configuration - use test workspace
         const launchArgs = [
-            extensionDevelopmentPath, // Open our project as workspace
-            '--disable-extensions', // Disable other extensions
-            '--disable-workspace-trust' // Don't prompt for trust
+            testWorkspacePath, // Open test workspace
+            '--disable-workspace-trust', // Don't prompt for trust
+            '--skip-welcome', // Skip welcome page
+            '--skip-release-notes' // Skip release notes
         ];
 
         // Download VS Code, unzip it and run the integration test

@@ -1,0 +1,10 @@
+{
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "java.project.sourcePaths": ["src/java"],
+  "python.linting.enabled": true,
+  "go.useLanguageServer": true,
+  "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+  "[csharp]": {
+    "editor.defaultFormatter": "ms-dotnettools.csharp"
+  }
+}

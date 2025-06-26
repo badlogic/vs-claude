@@ -1,0 +1,2 @@
+# Python dependencies for test workspace
+typing_extensions>=4.0.0

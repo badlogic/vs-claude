@@ -108,9 +108,14 @@ vs-claude/
 │   └── main.go         # MCP server implementation
 ├── test/                # Test suite
 │   ├── suite/
-│   │   ├── e2e.test.ts  # End-to-end MCP integration tests
-│   │   └── extension.test.ts # Extension unit tests
-│   └── runTest.ts       # Test runner
+│   │   ├── open-tool.test.ts  # Open tool e2e tests
+│   │   ├── query-tool.test.ts # Query tool e2e tests
+│   │   ├── extension.test.ts  # Extension unit tests
+│   │   └── test-helpers.ts    # Shared test utilities
+│   ├── test-workspace/  # Multi-language test project
+│   │   └── src/        # Sample code in various languages
+│   ├── setup-test-workspace.js # Git setup for tests
+│   └── runTest.ts      # Test runner
 ├── bin/                # Built binaries (generated)
 └── out/                # Compiled TypeScript (generated)
 ```
@@ -118,15 +123,31 @@ vs-claude/
 ### Testing
 
 The project includes comprehensive end-to-end tests that:
-- Launch VS Code with the extension in the project workspace
+- Launch VS Code with the extension in a dedicated test workspace
 - Spawn the MCP server as a subprocess
 - Act as an MCP client sending real commands
 - Verify actual VS Code behavior (files open, queries return results, etc.)
+
+#### Test Workspace
+
+The `test/test-workspace` directory contains a multi-language sample project used for testing:
+- **Purpose**: Provides consistent test files for language server features
+- **Languages**: TypeScript, C#, Go, Java, Python, C, C++
+- **Git Integration**: Automatically initialized as a git repository with test changes for diff testing
+- **Isolation**: Tests run in an isolated VS Code instance with this workspace
 
 Run tests with:
 ```bash
 npm test
 ```
+
+The test process:
+1. Cleans and rebuilds the extension
+2. Compiles test files
+3. Copies test workspace to output directory
+4. Initializes git repository with test changes
+5. Launches VS Code with the test workspace
+6. Runs all test suites
 
 ## Troubleshooting
 

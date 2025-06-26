@@ -1,13 +1,17 @@
 {
-  "extends": "./tsconfig.json",
   "compilerOptions": {
-    "rootDir": ".",
-    "outDir": "out",
-    "sourceMap": true
+    "module": "commonjs",
+    "target": "es2020",
+    "outDir": "out/test",
+    "lib": ["es2020"],
+    "sourceMap": true,
+    "rootDir": "test",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
   },
   "include": [
-    "src/**/*",
     "test/**/*"
   ],
-  "exclude": ["node_modules", ".vscode-test", "vscode", "mcp"]
+  "exclude": ["node_modules", ".vscode-test", "vscode", "mcp", "test/test-workspace"]
 }
