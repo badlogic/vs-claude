@@ -341,22 +341,10 @@ export class QueryHandler {
 
 			try {
 				const uri = vscode.Uri.file(filePath);
-				const documentSymbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-					'vscode.executeDocumentSymbolProvider',
-					uri
-				);
-
-				if (documentSymbols && documentSymbols.length > 0) {
-					// Apply the full original query to the document symbols
-					let filtered = this.filterSymbols(documentSymbols, query, kindFilter, '', includeDetails);
-					if (depth) {
-						filtered = this.limitDepth(filtered, depth);
-					}
-					// Add file path to top-level symbols for workspace queries
-					for (const symbol of filtered) {
-						symbol.location = `${filePath}:${symbol.location}`;
-					}
-					results.push(...filtered);
+				// Use symbolsInFile for consistent logic
+				const fileResult = await this.symbolsInFile(uri, query, kindFilter, depth, includeDetails);
+				if ('result' in fileResult) {
+					results.push(...fileResult.result);
 				}
 			} catch (fileError) {
 				this.outputChannel.appendLine(`Warning: Failed to get symbols for file ${filePath}: ${fileError}`);
@@ -418,24 +406,10 @@ export class QueryHandler {
 		// Process each file
 		for (const fileUri of files) {
 			try {
-				const documentSymbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-					'vscode.executeDocumentSymbolProvider',
-					fileUri
-				);
-
-				if (documentSymbols && documentSymbols.length > 0) {
-					let filtered = this.filterSymbols(documentSymbols, query, kindFilter, '', includeDetails);
-
-					if (depth) {
-						filtered = this.limitDepth(filtered, depth);
-					}
-
-					// Add file path to top-level symbols only
-					for (const symbol of filtered) {
-						symbol.location = `${fileUri.fsPath}:${symbol.location}`;
-					}
-
-					results.push(...filtered);
+				// Use symbolsInFile for consistent logic
+				const fileResult = await this.symbolsInFile(fileUri, query, kindFilter, depth, includeDetails);
+				if ('result' in fileResult) {
+					results.push(...fileResult.result);
 				}
 			} catch (fileError) {
 				// Log the error but continue processing other files
