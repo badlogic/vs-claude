@@ -145,12 +145,17 @@ Query types (with required parameters marked):
    USE THIS to explore a file's API and structure!
    
    Parameters: path (required), symbol?, kind?
+   - symbol: Filter by symbol name (supports wildcards like "get*", "set*", "*Test")
+   - kind: Filter by symbol type (comma-separated list)
    
    {"type": "outline", "path": "/path/to/file.ts"}  // full file structure
-   {"type": "outline", "path": "/path/to/file.ts", "symbol": "Animation"}  // outline of specific class
+   {"type": "outline", "path": "/path/to/file.ts", "symbol": "Animation"}  // outline of Animation class
+   {"type": "outline", "path": "/path/to/file.ts", "symbol": "get*"}  // all getters in file
+   {"type": "outline", "path": "/path/to/file.ts", "symbol": "*Test"}  // all test classes/methods
    {"type": "outline", "path": "/path/to/file.ts", "symbol": "Animation", "kind": "method"}  // only methods of Animation
    {"type": "outline", "path": "/path/to/file.ts", "kind": "method"}  // all methods in file
    {"type": "outline", "path": "/path/to/file.ts", "kind": "field,property"}  // all fields/properties in file
+   {"type": "outline", "path": "/path/to/file.ts", "symbol": "get*,set*", "kind": "method"}  // all getter/setter methods
 
 3. Get Diagnostics - Get compilation errors, warnings, and issues
    
@@ -193,9 +198,15 @@ When to use this tool vs others:
 ✗ Don't use grep/ripgrep for: Finding classes, methods, or understanding code - use query instead
 ✗ Don't read entire files for: Getting a file's methods/classes - use outline instead
 
+For complex navigation tasks, chain simple queries:
+- To find all getters in a class: First findSymbols for the class, then outline with symbol="get*"
+- To find implementations: findSymbols will show both declarations (.h) and definitions (.cpp)
+- To explore a type hierarchy: Use findSymbols for the base class, then outline on each result
+
 If this tool doesn't return expected results:
 - Language server might not support the file type (e.g., some config files, scripts)
 - The file or symbol might not yet be indexed or not be part of the VS Code workspace
+- For C++ implementations: findSymbols shows both .h declarations and .cpp definitions
 - Fall back to grep/ripgrep for text searches or Read tool for detailed inspection
 
 Notes:

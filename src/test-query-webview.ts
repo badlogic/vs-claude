@@ -216,8 +216,8 @@ export class TestQueryWebviewProvider {
                 <input type="text" id="outline-path" placeholder="/path/to/file.ts" />
             </div>
             <div class="input-group">
-                <label for="outline-symbol">Symbol (optional - get outline of specific symbol):</label>
-                <input type="text" id="outline-symbol" placeholder="ClassName" />
+                <label for="outline-symbol">Symbol (optional - supports wildcards like "get*", "set*"):</label>
+                <input type="text" id="outline-symbol" placeholder="ClassName or get*" />
             </div>
             <div class="input-group">
                 <label for="outline-kind">Kind (optional - filter by symbol type):</label>

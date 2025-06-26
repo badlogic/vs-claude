@@ -12,7 +12,7 @@ interface FindSymbolsRequest {
 interface OutlineRequest {
 	type: 'outline';
 	path: string;
-	symbol?: string;
+	symbol?: string; // Filter to specific symbol or use wildcards like "get*"
 	kind?: string;
 }
 
@@ -24,8 +24,8 @@ interface DiagnosticsRequest {
 interface ReferencesRequest {
 	type: 'references';
 	path: string; // Required: file containing the symbol
-	line: number; // Required: line number of the symbol
-	character?: number; // Optional: character position in the line
+	line: number; // Required: line number of the symbol (1-based)
+	character?: number; // Optional: character position in the line (1-based)
 }
 
 export type QueryRequest = FindSymbolsRequest | OutlineRequest | DiagnosticsRequest | ReferencesRequest;
@@ -174,13 +174,13 @@ export class QueryHandler {
 				symbolData = this.filterOutlineSymbols(
 					documentSymbols,
 					request.symbol || '*', // If no symbol specified, match all
-					!!request.symbol, // exact match only if symbol is specified
+					false, // Always use pattern matching for outline
 					request.kind
 				);
 
 				if (symbolData.length === 0) {
 					const filterDesc = request.symbol
-						? `Symbol '${request.symbol}'${request.kind ? ` of type ${request.kind}` : ''}`
+						? `Symbols matching '${request.symbol}'${request.kind ? ` of type ${request.kind}` : ''}`
 						: `Symbols of type ${request.kind}`;
 					return { error: `${filterDesc} not found in file` };
 				}
