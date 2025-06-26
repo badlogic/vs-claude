@@ -682,7 +682,7 @@ export class TestToolWebviewProvider {
                 kinds.push(cb.value);
             });
             
-            const request = { type: 'findSymbols', query };
+            const request = { type: 'symbols', query };
             if (path) request.path = path;
             if (kinds.length > 0) request.kind = kinds.join(',');
             if (exclude) request.exclude = exclude.split(',').map(p => p.trim());
@@ -744,9 +744,9 @@ export class TestToolWebviewProvider {
                 return;
             }
             
-            const request = { type: 'fileOutline', path };
-            if (symbol) request.symbol = symbol;
-            if (kind) request.kind = kind;
+            const request = { type: 'symbols', path };
+            if (symbol) request.query = symbol;
+            if (kind) request.kinds = [kind];
             
             vscode.postMessage({ command: 'runQuery', query: request, queryType: 'outline' });
         }
