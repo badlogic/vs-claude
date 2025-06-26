@@ -818,11 +818,51 @@ export class QueryHandler {
 			);
 
 			// Prepare type hierarchy at position
-			const typeHierarchyItems = await vscode.commands.executeCommand<vscode.TypeHierarchyItem[]>(
+			let typeHierarchyItems = await vscode.commands.executeCommand<vscode.TypeHierarchyItem[]>(
 				'vscode.prepareTypeHierarchy',
 				uri,
 				position
 			);
+
+			// If no results and character position is 0, try to find a symbol on this line
+			if ((!typeHierarchyItems || typeHierarchyItems.length === 0) && request.character === undefined) {
+				// Get the document to scan the line
+				const document = await vscode.workspace.openTextDocument(uri);
+				const line = document.lineAt(position.line).text;
+
+				// Look for class/interface declaration on this line or nearby lines
+				const classMatch = line.match(/\b(class|interface|enum)\s+(\w+)/);
+				if (classMatch) {
+					// Try again at the position of the type name
+					const charPos = line.indexOf(classMatch[2]);
+					if (charPos !== -1) {
+						const newPosition = new vscode.Position(position.line, charPos);
+						typeHierarchyItems = await vscode.commands.executeCommand<vscode.TypeHierarchyItem[]>(
+							'vscode.prepareTypeHierarchy',
+							uri,
+							newPosition
+						);
+					}
+				} else {
+					// Try scanning a few lines down for the actual declaration
+					for (let offset = 1; offset <= 20 && position.line + offset < document.lineCount; offset++) {
+						const scanLine = document.lineAt(position.line + offset).text;
+						const scanMatch = scanLine.match(/\b(class|interface|enum)\s+(\w+)/);
+						if (scanMatch) {
+							const charPos = scanLine.indexOf(scanMatch[2]);
+							if (charPos !== -1) {
+								const newPosition = new vscode.Position(position.line + offset, charPos);
+								typeHierarchyItems = await vscode.commands.executeCommand<vscode.TypeHierarchyItem[]>(
+									'vscode.prepareTypeHierarchy',
+									uri,
+									newPosition
+								);
+								break;
+							}
+						}
+					}
+				}
+			}
 
 			if (!typeHierarchyItems || typeHierarchyItems.length === 0) {
 				return { result: [] };
