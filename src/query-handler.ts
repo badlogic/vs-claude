@@ -575,8 +575,10 @@ export class QueryHandler {
 			// Build the full hierarchical path for this symbol
 			const fullPath = parentPath ? `${parentPath}.${symbol.name}` : symbol.name;
 
-			// Check if this symbol matches our criteria using the full path
-			const symbolMatches = this.nameAndKindMatches(fullPath, symbol.kind, query, kindFilter);
+			// Check if this symbol matches our criteria using EITHER the full path OR just the symbol name
+			const fullPathMatches = this.nameAndKindMatches(fullPath, symbol.kind, query, kindFilter);
+			const nameMatches = this.nameAndKindMatches(symbol.name, symbol.kind, query, kindFilter);
+			const symbolMatches = fullPathMatches || nameMatches;
 
 			if (symbolMatches) {
 				// Symbol matches: include it with ALL its children (unfiltered)
