@@ -91,7 +91,7 @@ MCP Client (Claude) ↔ MCP Server ↔ File System ↔ VS Code Extension
 npm run build     # Build TypeScript and Go binaries
 npm run check     # Format and lint all code
 npm run typecheck # TypeScript type checking
-npm run test      # Run tests
+npm run test      # Run e2e tests (builds MCP server, compiles tests, launches VS Code)
 npm run clean     # Remove build artifacts
 ```
 
@@ -107,8 +107,26 @@ vs-claude/
 │   └── setup.ts         # MCP installation logic
 ├── mcp/                 # Go MCP server source
 │   └── main.go         # MCP server implementation
+├── test/                # Test suite
+│   ├── suite/
+│   │   ├── e2e.test.ts  # End-to-end MCP integration tests
+│   │   └── extension.test.ts # Extension unit tests
+│   └── runTest.ts       # Test runner
 ├── bin/                # Built binaries (generated)
 └── out/                # Compiled TypeScript (generated)
+```
+
+### Testing
+
+The project includes comprehensive end-to-end tests that:
+- Launch VS Code with the extension in the project workspace
+- Spawn the MCP server as a subprocess
+- Act as an MCP client sending real commands
+- Verify actual VS Code behavior (files open, queries return results, etc.)
+
+Run tests with:
+```bash
+npm test
 ```
 
 ## Troubleshooting
