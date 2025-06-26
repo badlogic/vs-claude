@@ -307,6 +307,10 @@ export class QueryHandler {
 			rootQuery
 		);
 
+		this.outputChannel.appendLine(
+			`Workspace search for "${rootQuery}" returned ${workspaceSymbols?.length || 0} symbols`
+		);
+
 		if (!workspaceSymbols || workspaceSymbols.length === 0) {
 			return { result: [] };
 		}
@@ -345,6 +349,13 @@ export class QueryHandler {
 				if (documentSymbols && documentSymbols.length > 0) {
 					// Apply the full original query to the document symbols
 					let filtered = this.filterSymbols(documentSymbols, query, kindFilter, '', includeDetails);
+
+					if (filtered.length === 0 && filePath.includes('Pixmap.java')) {
+						this.outputChannel.appendLine(`No symbols matched in ${filePath} for query "${query}"`);
+						this.outputChannel.appendLine(
+							`Document symbols: ${documentSymbols.map((s) => s.name).join(', ')}`
+						);
+					}
 
 					if (depth) {
 						filtered = this.limitDepth(filtered, depth);
@@ -588,7 +599,7 @@ export class QueryHandler {
 						name: symbol.name,
 						detail: symbol.detail,
 						kind: vscode.SymbolKind[symbol.kind],
-						location: this.formatRange(symbol.range),
+						location: this.formatRange(symbol.selectionRange),
 						children: filteredChildren,
 					};
 					result.push(sym);
@@ -605,7 +616,7 @@ export class QueryHandler {
 			name: symbol.name,
 			detail: symbol.detail,
 			kind: vscode.SymbolKind[symbol.kind],
-			location: this.formatRange(symbol.range),
+			location: this.formatRange(symbol.selectionRange),
 			children:
 				symbol.children && symbol.children.length > 0
 					? symbol.children.map((s) => this.convertDocumentSymbol(s, includeDetails))
@@ -817,6 +828,10 @@ export class QueryHandler {
 				request.character ? request.character - 1 : 0
 			);
 
+			this.outputChannel.appendLine(
+				`Type hierarchy at ${uri.fsPath}:${position.line + 1}:${position.character + 1}`
+			);
+
 			// Prepare type hierarchy at position
 			const typeHierarchyItems = await vscode.commands.executeCommand<vscode.TypeHierarchyItem[]>(
 				'vscode.prepareTypeHierarchy',
@@ -824,7 +839,16 @@ export class QueryHandler {
 				position
 			);
 
+			this.outputChannel.appendLine(
+				`Type hierarchy items: ${typeHierarchyItems ? typeHierarchyItems.length : 0}`
+			);
+
 			if (!typeHierarchyItems || typeHierarchyItems.length === 0) {
+				// Try to provide helpful feedback
+				const doc = await vscode.workspace.openTextDocument(uri);
+				const line = doc.lineAt(position.line);
+				this.outputChannel.appendLine(`Line content: "${line.text.trim()}"`);
+
 				return { result: [] };
 			}
 

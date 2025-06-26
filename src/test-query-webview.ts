@@ -300,6 +300,87 @@ export class TestQueryWebviewProvider {
         </div>
     </div>
 
+    <!-- Definition -->
+    <div class="query-section" id="definition-section">
+        <div class="query-header" onclick="toggleSection('definition')">
+            <h2>4. Go to Definition</h2>
+            <span class="collapse-icon">▼</span>
+        </div>
+        <div class="query-content">
+            <div class="input-group">
+                <label for="definition-path">File Path:</label>
+                <input type="text" id="definition-path" placeholder="/path/to/file.ts" />
+            </div>
+            <div class="input-group">
+                <label for="definition-line">Line Number (1-based):</label>
+                <input type="text" id="definition-line" placeholder="42" />
+            </div>
+            <div class="input-group">
+                <label for="definition-character">Character Position (optional, 1-based):</label>
+                <input type="text" id="definition-character" placeholder="15" />
+            </div>
+            <button onclick="runDefinition()">Find Definition</button>
+            <button onclick="clearResult('definition')">Clear</button>
+            <div id="definition-result" class="result"></div>
+        </div>
+    </div>
+
+    <!-- Supertype -->
+    <div class="query-section" id="supertype-section">
+        <div class="query-header" onclick="toggleSection('supertype')">
+            <h2>5. Find Supertypes</h2>
+            <span class="collapse-icon">▼</span>
+        </div>
+        <div class="query-content">
+            <div class="input-group">
+                <label for="supertype-path">File Path:</label>
+                <input type="text" id="supertype-path" placeholder="/path/to/file.ts" />
+            </div>
+            <div class="input-group">
+                <label for="supertype-line">Line Number (1-based):</label>
+                <input type="text" id="supertype-line" placeholder="42" />
+                <small style="display: block; margin-top: 4px; color: var(--vscode-descriptionForeground);">
+                    Finds parent types (extends/implements) for the type at this location
+                </small>
+            </div>
+            <div class="input-group">
+                <label for="supertype-character">Character Position (optional, 1-based):</label>
+                <input type="text" id="supertype-character" placeholder="15" />
+            </div>
+            <button onclick="runSupertype()">Find Supertypes</button>
+            <button onclick="clearResult('supertype')">Clear</button>
+            <div id="supertype-result" class="result"></div>
+        </div>
+    </div>
+
+    <!-- Subtype -->
+    <div class="query-section" id="subtype-section">
+        <div class="query-header" onclick="toggleSection('subtype')">
+            <h2>6. Find Subtypes</h2>
+            <span class="collapse-icon">▼</span>
+        </div>
+        <div class="query-content">
+            <div class="input-group">
+                <label for="subtype-path">File Path:</label>
+                <input type="text" id="subtype-path" placeholder="/path/to/file.ts" />
+            </div>
+            <div class="input-group">
+                <label for="subtype-line">Line Number (1-based):</label>
+                <input type="text" id="subtype-line" placeholder="42" />
+                <small style="display: block; margin-top: 4px; color: var(--vscode-descriptionForeground);">
+                    Finds derived types (implementations/subclasses) for the type at this location
+                </small>
+            </div>
+            <div class="input-group">
+                <label for="subtype-character">Character Position (optional, 1-based):</label>
+                <input type="text" id="subtype-character" placeholder="15" />
+            </div>
+            <button onclick="runSubtype()">Find Subtypes</button>
+            <button onclick="clearResult('subtype')">Clear</button>
+            <div id="subtype-result" class="result"></div>
+        </div>
+    </div>
+
     <script>
         const vscode = acquireVsCodeApi();
         let currentQueryType = null;
@@ -395,6 +476,87 @@ export class TestQueryWebviewProvider {
             }
 
             runQuery(request, 'references');
+        }
+
+        function runDefinition() {
+            const path = document.getElementById('definition-path').value;
+            const line = document.getElementById('definition-line').value;
+            const character = document.getElementById('definition-character').value;
+
+            if (!path) {
+                showError('Path is required', 'definition');
+                return;
+            }
+            if (!line) {
+                showError('Line number is required', 'definition');
+                return;
+            }
+
+            const request = {
+                type: 'definition',
+                path: path,
+                line: parseInt(line, 10)
+            };
+
+            if (character) {
+                request.character = parseInt(character, 10);
+            }
+
+            runQuery(request, 'definition');
+        }
+
+        function runSupertype() {
+            const path = document.getElementById('supertype-path').value;
+            const line = document.getElementById('supertype-line').value;
+            const character = document.getElementById('supertype-character').value;
+
+            if (!path) {
+                showError('Path is required', 'supertype');
+                return;
+            }
+            if (!line) {
+                showError('Line number is required', 'supertype');
+                return;
+            }
+
+            const request = {
+                type: 'supertype',
+                path: path,
+                line: parseInt(line, 10)
+            };
+
+            if (character) {
+                request.character = parseInt(character, 10);
+            }
+
+            runQuery(request, 'supertype');
+        }
+
+        function runSubtype() {
+            const path = document.getElementById('subtype-path').value;
+            const line = document.getElementById('subtype-line').value;
+            const character = document.getElementById('subtype-character').value;
+
+            if (!path) {
+                showError('Path is required', 'subtype');
+                return;
+            }
+            if (!line) {
+                showError('Line number is required', 'subtype');
+                return;
+            }
+
+            const request = {
+                type: 'subtype',
+                path: path,
+                line: parseInt(line, 10)
+            };
+
+            if (character) {
+                request.character = parseInt(character, 10);
+            }
+
+            runQuery(request, 'subtype');
         }
 
         function runQuery(query, queryType) {
