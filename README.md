@@ -7,7 +7,7 @@ A VS Code extension with an integrated MCP server that allows MCP clients like C
 VS Claude provides two tools for AI assistants:
 
 1. **query** - Semantic code search using VS Code's language intelligence
-   - Find symbols (classes, methods, functions) with hierarchical queries
+   - Find symbols (classes, methods, functions, variables, etc.) with hierarchical queries
    - Get references, definitions, and diagnostics
    - Explore type hierarchies (supertypes/subtypes)
    - See [`mcp/main.go`](mcp/main.go) for the full tool description
@@ -44,9 +44,7 @@ After installation:
 1. Run command "VS Claude: Install MCP"
 2. The extension will install the MCP server for Claude
 3. Restart Claude to activate
-
-
-
+4. Instruct Claude to use the vs-claude tools if appropriate for the task
 
 ## Architecture
 
@@ -60,7 +58,7 @@ VS Claude consists of two components:
 
 **Commands:**
 - `VS Claude: Install MCP` - Install the MCP server with Claude
-- `VS Claude: Uninstall MCP` - Remove the MCP server from Claude  
+- `VS Claude: Uninstall MCP` - Remove the MCP server from Claude
 - `VS Claude: Test Query Tool` - Open interactive query tester
 
 ### MCP Server (Go)
@@ -146,8 +144,12 @@ The test process:
 2. Compiles test files
 3. Copies test workspace to output directory
 4. Initializes git repository with test changes
-5. Launches VS Code with the test workspace
-6. Runs all test suites
+5. Downloads VS Code (if not cached)
+6. Installs required language extensions (Python, Go, C#, Java, C/C++, Dart)
+7. Launches VS Code with the test workspace
+8. Runs all test suites
+
+**Note**: First test run will be slower as it downloads VS Code and installs language extensions.
 
 ## Troubleshooting
 
