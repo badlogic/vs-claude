@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { type Command, CommandHandler, type CommandResponse } from './command-handler';
+import { logger } from './logger';
 
 export interface WindowInfo {
 	workspace: string;
@@ -22,13 +23,13 @@ export class WindowManager {
 	private vsClaudeDir: string;
 	private commandHandler: CommandHandler;
 
-	constructor(private outputChannel: vscode.OutputChannel) {
+	constructor() {
 		this.vsClaudeDir = path.join(os.homedir(), '.vs-claude');
 		this.windowId = this.generateWindowId();
 		this.commandFile = path.join(this.vsClaudeDir, `${this.windowId}.in`);
 		this.metadataFile = path.join(this.vsClaudeDir, `${this.windowId}.meta.json`);
 		this.responseFile = path.join(this.vsClaudeDir, `${this.windowId}.out`);
-		this.commandHandler = new CommandHandler(outputChannel);
+		this.commandHandler = new CommandHandler();
 	}
 
 	async initialize(): Promise<void> {
@@ -36,11 +37,7 @@ export class WindowManager {
 			fs.mkdirSync(this.vsClaudeDir, { recursive: true });
 		}
 
-		this.outputChannel.appendLine(`VS Claude Window Manager initialized with window ID: ${this.windowId}`);
-		this.outputChannel.appendLine(`Directory: ${this.vsClaudeDir}`);
-		this.outputChannel.appendLine(`Metadata file: ${this.metadataFile}`);
-		this.outputChannel.appendLine(`Command file: ${this.commandFile}`);
-		this.outputChannel.appendLine(`Response file: ${this.responseFile}`);
+		logger.info('WindowManager', `Initialized with window ID: ${this.windowId}`);
 
 		await this.updateWindowMetadata();
 
@@ -68,18 +65,15 @@ export class WindowManager {
 		try {
 			if (fs.existsSync(this.commandFile)) {
 				fs.unlinkSync(this.commandFile);
-				this.outputChannel.appendLine(`Removed command file: ${this.commandFile}`);
 			}
 			if (fs.existsSync(this.metadataFile)) {
 				fs.unlinkSync(this.metadataFile);
-				this.outputChannel.appendLine(`Removed metadata file: ${this.metadataFile}`);
 			}
 			if (fs.existsSync(this.responseFile)) {
 				fs.unlinkSync(this.responseFile);
-				this.outputChannel.appendLine(`Removed response file: ${this.responseFile}`);
 			}
 		} catch (error) {
-			this.outputChannel.appendLine(`Cleanup error: ${error}`);
+			logger.error('WindowManager', `Cleanup error: ${error}`);
 		}
 	}
 
@@ -98,7 +92,7 @@ export class WindowManager {
 			const responseData = `${JSON.stringify(response)}\n`;
 			this.responseStream.write(responseData, (error) => {
 				if (error) {
-					this.outputChannel.appendLine(`Failed to write response: ${error}`);
+					logger.error('WindowManager', `Failed to write response: ${error}`);
 					reject(error);
 					return;
 				}
@@ -109,7 +103,10 @@ export class WindowManager {
 				if (this.responseStream) {
 					this.responseStream.uncork();
 				}
-				this.outputChannel.appendLine(`[RESPONSE SENT] ${JSON.stringify(response)}`);
+				// Only log errors and important responses
+				if (!response.success) {
+					logger.debug('WindowManager', `Response sent (error): ${response.error}`);
+				}
 				resolve();
 			});
 		});
@@ -131,12 +128,10 @@ export class WindowManager {
 	private startCommandWatcher(): void {
 		if (!fs.existsSync(this.commandFile)) {
 			fs.writeFileSync(this.commandFile, '');
-			this.outputChannel.appendLine(`Created command file: ${this.commandFile}`);
 		}
 
 		if (!fs.existsSync(this.responseFile)) {
 			fs.writeFileSync(this.responseFile, '');
-			this.outputChannel.appendLine(`Created response file: ${this.responseFile}`);
 		}
 
 		this.responseStream = fs.createWriteStream(this.responseFile, {
@@ -146,7 +141,7 @@ export class WindowManager {
 		});
 
 		this.responseStream.on('error', (error) => {
-			this.outputChannel.appendLine(`Response stream error: ${error}`);
+			logger.error('WindowManager', `Response stream error: ${error}`);
 		});
 
 		let lastPosition = 0;
@@ -185,7 +180,7 @@ export class WindowManager {
 						for (const line of completeLines) {
 							try {
 								const command: Command = JSON.parse(line);
-								this.outputChannel.appendLine(`[COMMAND RECEIVED] ${JSON.stringify(command)}`);
+								logger.command(command.tool);
 
 								// Execute the command
 								const result = await this.commandHandler.executeCommand(command);
@@ -199,7 +194,7 @@ export class WindowManager {
 								};
 								await this.writeResponse(response);
 							} catch (error) {
-								this.outputChannel.appendLine(`Failed to parse/execute command: ${error}`);
+								logger.error('WindowManager', `Failed to parse/execute command: ${error}`);
 
 								// Always send error response for better reliability
 								try {
@@ -216,7 +211,7 @@ export class WindowManager {
 						}
 					}
 				} catch (error) {
-					this.outputChannel.appendLine(`Error watching command file: ${error}`);
+					logger.error('WindowManager', `Error watching command file: ${error}`);
 				}
 			}
 		});

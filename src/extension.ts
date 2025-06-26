@@ -1,21 +1,19 @@
 import * as vscode from 'vscode';
+import { logger } from './logger';
 import { SetupManager } from './setup';
 import { TestQueryWebviewProvider } from './test-query-webview';
 import { WindowManager } from './window-manager';
 
-let outputChannel: vscode.OutputChannel;
 let windowManager: WindowManager;
 let setupManager: SetupManager;
 let testQueryProvider: TestQueryWebviewProvider;
 
 export async function activate(context: vscode.ExtensionContext) {
-	outputChannel = vscode.window.createOutputChannel('VS Claude');
-	outputChannel.appendLine('VS Claude extension activated');
-	outputChannel.show();
+	logger.info('Extension', 'VS Claude extension activating...');
 
-	windowManager = new WindowManager(outputChannel);
-	setupManager = new SetupManager(outputChannel, context);
-	testQueryProvider = new TestQueryWebviewProvider(context, outputChannel);
+	windowManager = new WindowManager();
+	setupManager = new SetupManager(context);
+	testQueryProvider = new TestQueryWebviewProvider(context);
 
 	await windowManager.initialize();
 
@@ -34,10 +32,11 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(showSetupCommand);
 	context.subscriptions.push(uninstallCommand);
 	context.subscriptions.push(testQueryCommand);
-	context.subscriptions.push(outputChannel);
+	context.subscriptions.push(logger);
 
-	outputChannel.appendLine('Checking MCP installation on startup...');
 	await setupManager.checkAndInstallMCP();
+
+	logger.info('Extension', 'VS Claude extension ready');
 
 	context.subscriptions.push({
 		dispose: () => {
@@ -47,6 +46,7 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
+	logger.info('Extension', 'VS Claude extension deactivating...');
 	windowManager?.dispose();
-	outputChannel?.dispose();
+	logger.dispose();
 }

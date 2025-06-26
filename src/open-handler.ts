@@ -4,6 +4,7 @@ import { promisify } from 'util';
 import * as vscode from 'vscode';
 import type { GitAPI, GitExtension } from './git';
 import { findGitRoot } from './git-utils';
+import { logger } from './logger';
 
 const execPromise = promisify(exec);
 
@@ -39,12 +40,7 @@ type OpenItem = OpenFileItem | OpenDiffItem | OpenGitDiffItem;
 type OpenArgs = OpenItem | OpenItem[];
 
 export class OpenHandler {
-	constructor(private outputChannel: vscode.OutputChannel) {}
-
 	async execute(args: OpenArgs): Promise<{ success: boolean; error?: string }> {
-		this.outputChannel.appendLine(`Executing open command`);
-		this.outputChannel.appendLine(`Open args: ${JSON.stringify(args, null, 2)}`);
-
 		// Normalize to array of items
 		let items: OpenItem[];
 
@@ -81,7 +77,7 @@ export class OpenHandler {
 				successCount += fileItems.length;
 			} catch (error) {
 				const errorMsg = this.formatFileError(path, error);
-				this.outputChannel.appendLine(`Failed to open file ${path}: ${errorMsg}`);
+				logger.error('OpenHandler', `Failed to open file ${path}: ${errorMsg}`);
 				for (const item of fileItems) {
 					failedItems.push({ item, error: errorMsg });
 				}
@@ -95,7 +91,7 @@ export class OpenHandler {
 				successCount++;
 			} catch (error) {
 				const errorMsg = this.formatItemError(item, error);
-				this.outputChannel.appendLine(`Failed to open item: ${errorMsg}`);
+				logger.error('OpenHandler', `Failed to open item: ${errorMsg}`);
 				failedItems.push({ item, error: errorMsg });
 			}
 		}
@@ -111,7 +107,12 @@ export class OpenHandler {
 			};
 		} else {
 			// Partial success
-			this.outputChannel.appendLine(`Opened ${successCount} items successfully, ${failedItems.length} failed`);
+			if (failedItems.length > 0) {
+				logger.warn(
+					'OpenHandler',
+					`Opened ${successCount}/${items.length} items (${failedItems.length} failed)`
+				);
+			}
 			return {
 				success: true, // Return success if at least one item opened
 			};
@@ -229,12 +230,8 @@ export class OpenHandler {
 
 		const git: GitAPI = gitExtension.exports.getAPI(1);
 
-		// Log current git API state
-		this.outputChannel.appendLine(`Git API state: ${git.state}`);
-
 		// Wait for git extension to initialize
 		if (git.state !== 'initialized') {
-			this.outputChannel.appendLine('Waiting for git extension to initialize...');
 			await new Promise<void>((resolve) => {
 				const disposable = git.onDidChangeState((state) => {
 					if (state === 'initialized') {
@@ -263,7 +260,7 @@ export class OpenHandler {
 			} else {
 				// Check if we're in a subfolder of a git repository
 				const workspaceFolder = vscode.workspace.workspaceFolders[0].uri.fsPath;
-				this.outputChannel.appendLine(`No repositories found. Current workspace folder: ${workspaceFolder}`);
+				logger.warn('OpenHandler', 'No git repositories found in workspace');
 
 				const gitRoot = findGitRoot(workspaceFolder);
 				if (gitRoot && gitRoot !== workspaceFolder) {
@@ -286,11 +283,10 @@ export class OpenHandler {
 		const fileUri = vscode.Uri.file(item.path);
 
 		// Log available repositories for debugging
-		this.outputChannel.appendLine(`Git repositories found: ${repos.length}`);
-		repos.forEach((r, i) => {
-			this.outputChannel.appendLine(`  ${i}: ${r.rootUri.path}`);
-		});
-		this.outputChannel.appendLine(`Looking for repository containing: ${fileUri.path}`);
+		// Only log if we have multiple repos or none
+		if (repos.length === 0 || repos.length > 1) {
+			logger.debug('OpenHandler', `Git repositories found: ${repos.length}`);
+		}
 
 		const repo = repos.find((r) => fileUri.path.startsWith(r.rootUri.path));
 		if (!repo) {
@@ -326,8 +322,7 @@ export class OpenHandler {
 			}
 
 			// Log the URIs for debugging
-			this.outputChannel.appendLine(`Left URI: ${leftUri.toString()}`);
-			this.outputChannel.appendLine(`Right URI: ${rightUri.toString()}`);
+			// Debug logging removed - URIs are already visible in the command
 		} catch (error) {
 			throw new Error(`Failed to create git URIs: ${error}`);
 		}
@@ -346,15 +341,19 @@ export class OpenHandler {
 
 			if (item.from !== 'working' && item.from !== 'staged') {
 				const fromHash = await checkRef(item.from);
-				this.outputChannel.appendLine(`From ref '${item.from}' resolves to: ${fromHash || 'NOT FOUND'}`);
+				if (!fromHash) {
+					logger.warn('OpenHandler', `From ref '${item.from}' not found`);
+				}
 			}
 
 			if (item.to !== 'working' && item.to !== 'staged') {
 				const toHash = await checkRef(item.to);
-				this.outputChannel.appendLine(`To ref '${item.to}' resolves to: ${toHash || 'NOT FOUND'}`);
+				if (!toHash) {
+					logger.warn('OpenHandler', `To ref '${item.to}' not found`);
+				}
 			}
 		} catch (error) {
-			this.outputChannel.appendLine(`Failed to verify refs: ${error}`);
+			logger.warn('OpenHandler', `Failed to verify refs: ${error}`);
 		}
 
 		await vscode.commands.executeCommand(

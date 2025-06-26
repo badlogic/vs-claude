@@ -1,15 +1,13 @@
 import * as vscode from 'vscode';
+import { logger } from './logger';
 import { QueryHandler } from './query-handler';
 
 export class TestQueryWebviewProvider {
 	private panel: vscode.WebviewPanel | undefined;
 	private queryHandler: QueryHandler;
 
-	constructor(
-		private context: vscode.ExtensionContext,
-		private outputChannel: vscode.OutputChannel
-	) {
-		this.queryHandler = new QueryHandler(outputChannel);
+	constructor(private context: vscode.ExtensionContext) {
+		this.queryHandler = new QueryHandler();
 	}
 
 	public show() {
@@ -35,7 +33,7 @@ export class TestQueryWebviewProvider {
 				switch (message.command) {
 					case 'runQuery': {
 						const result = await this.queryHandler.execute(message.query);
-						this.outputChannel.appendLine(JSON.stringify(result, null, 2));
+						logger.debug('TestQueryWebview', 'Query result', result);
 						this.panel?.webview.postMessage({
 							command: 'queryResult',
 							result,

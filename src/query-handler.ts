@@ -1,5 +1,6 @@
 import { minimatch } from 'minimatch';
 import * as vscode from 'vscode';
+import { logger } from './logger';
 
 // Request types for each query
 type SymbolKindName =
@@ -112,8 +113,6 @@ export type QueryResponse = { result: Result } | { error: string };
 // Symbol type is defined above
 
 export class QueryHandler {
-	constructor(private outputChannel: vscode.OutputChannel) {}
-
 	async execute(request: QueryRequest | QueryRequest[]): Promise<QueryResponse[]> {
 		// Handle batch queries
 		if (Array.isArray(request)) {
@@ -125,14 +124,11 @@ export class QueryHandler {
 	}
 
 	private async executeBatch(queries: QueryRequest[]): Promise<QueryResponse[]> {
-		this.outputChannel.appendLine(`Executing batch of ${queries.length} queries`);
+		logger.info('QueryHandler', `Batch query (${queries.length} queries)`);
 		return await Promise.all(queries.map((query) => this.executeSingle(query)));
 	}
 
 	private async executeSingle(request: QueryRequest): Promise<QueryResponse> {
-		this.outputChannel.appendLine(`Executing query: ${request.type}`);
-		this.outputChannel.appendLine(`Query args: ${JSON.stringify(request, null, 2)}`);
-
 		try {
 			switch (request.type) {
 				case 'symbols':
@@ -152,12 +148,7 @@ export class QueryHandler {
 				}
 			}
 		} catch (error) {
-			const errorMessage = `Query execution error: ${error}`;
-			this.outputChannel.appendLine(errorMessage);
-			if (error instanceof Error && error.stack) {
-				this.outputChannel.appendLine('Stack trace:');
-				this.outputChannel.appendLine(error.stack);
-			}
+			logger.error('QueryHandler', `Query execution error: ${error}`);
 			return { error: String(error) };
 		}
 	}
@@ -208,10 +199,7 @@ export class QueryHandler {
 
 			return result;
 		} catch (error) {
-			if (error instanceof Error && error.stack) {
-				this.outputChannel.appendLine('Stack trace:');
-				this.outputChannel.appendLine(error.stack);
-			}
+			logger.error('QueryHandler', `Failed to find symbols: ${error}`);
 			return { error: `Failed to find symbols: ${error}` };
 		}
 	}
@@ -227,7 +215,8 @@ export class QueryHandler {
 		);
 
 		if (!documentSymbols) {
-			this.outputChannel.appendLine(
+			logger.debug(
+				'QueryHandler',
 				`No symbol provider available for ${uri.fsPath} - language server may not be active yet`
 			);
 			return { result: [] };
@@ -265,9 +254,9 @@ export class QueryHandler {
 			cleanedRootQuery
 		);
 
-		this.outputChannel.appendLine(
-			`Workspace search for "${rootQuery}" (cleaned: "${cleanedRootQuery}") returned ${workspaceSymbols?.length || 0} symbols`
-		);
+		if (workspaceSymbols && workspaceSymbols.length > 50) {
+			logger.debug('QueryHandler', `Workspace search returned ${workspaceSymbols.length} symbols`);
+		}
 
 		if (!workspaceSymbols || workspaceSymbols.length === 0) {
 			return { result: [] };
@@ -305,11 +294,7 @@ export class QueryHandler {
 					results.push(...fileResult.result);
 				}
 			} catch (fileError) {
-				this.outputChannel.appendLine(`Warning: Failed to get symbols for file ${filePath}: ${fileError}`);
-				if (fileError instanceof Error && fileError.stack) {
-					this.outputChannel.appendLine('Stack trace:');
-					this.outputChannel.appendLine(fileError.stack);
-				}
+				logger.debug('QueryHandler', `Failed to get symbols for file ${filePath}: ${fileError}`);
 			}
 		}
 
@@ -351,13 +336,15 @@ export class QueryHandler {
 					}
 				}
 			} catch (error) {
-				this.outputChannel.appendLine(`Warning: Failed to read directory ${uri.fsPath}: ${error}`);
+				logger.debug('QueryHandler', `Failed to read directory ${uri.fsPath}: ${error}`);
 			}
 			return files;
 		};
 
 		const files = await findFiles(folderUri);
-		this.outputChannel.appendLine(`Found ${files.length} files in folder ${folderPath}`);
+		if (files.length > 20) {
+			logger.debug('QueryHandler', `Searching ${files.length} files in ${folderPath}`);
+		}
 
 		// Process each file
 		for (const fileUri of files) {
@@ -369,9 +356,7 @@ export class QueryHandler {
 				}
 			} catch (fileError) {
 				// Log the error but continue processing other files
-				this.outputChannel.appendLine(
-					`Warning: Failed to get symbols for file ${fileUri.fsPath}: ${fileError}`
-				);
+				logger.debug('QueryHandler', `Failed to get symbols for file ${fileUri.fsPath}: ${fileError}`);
 			}
 		}
 
@@ -404,10 +389,7 @@ export class QueryHandler {
 
 			return { result: diagnostics };
 		} catch (error) {
-			if (error instanceof Error && error.stack) {
-				this.outputChannel.appendLine('Stack trace:');
-				this.outputChannel.appendLine(error.stack);
-			}
+			logger.error('QueryHandler', `Failed to get diagnostics: ${error}`);
 			return { error: `Failed to get diagnostics: ${error}` };
 		}
 	}
@@ -446,10 +428,7 @@ export class QueryHandler {
 
 			return { result: referencesWithPreview };
 		} catch (error) {
-			if (error instanceof Error && error.stack) {
-				this.outputChannel.appendLine('Stack trace:');
-				this.outputChannel.appendLine(error.stack);
-			}
+			logger.error('QueryHandler', `Failed to find references: ${error}`);
 			return { error: `Failed to find references: ${error}` };
 		}
 	}
@@ -659,10 +638,7 @@ export class QueryHandler {
 
 			return { result: results };
 		} catch (error) {
-			if (error instanceof Error && error.stack) {
-				this.outputChannel.appendLine('Stack trace:');
-				this.outputChannel.appendLine(error.stack);
-			}
+			logger.error('QueryHandler', `Failed to find definition: ${error}`);
 			return { error: `Failed to find definition: ${error}` };
 		}
 	}
@@ -772,9 +748,7 @@ export class QueryHandler {
 				request.column ? request.column - 1 : 0
 			);
 
-			this.outputChannel.appendLine(
-				`Type hierarchy at ${uri.fsPath}:${position.line + 1}:${position.character + 1}`
-			);
+			// Position already logged by the query
 
 			// Prepare type hierarchy at position
 			const typeHierarchyItems = await vscode.commands.executeCommand<vscode.TypeHierarchyItem[]>(
@@ -783,16 +757,9 @@ export class QueryHandler {
 				position
 			);
 
-			this.outputChannel.appendLine(
-				`Type hierarchy items: ${typeHierarchyItems ? typeHierarchyItems.length : 0}`
-			);
+			// Item count logged in result
 
 			if (!typeHierarchyItems || typeHierarchyItems.length === 0) {
-				// Try to provide helpful feedback
-				const doc = await vscode.workspace.openTextDocument(uri);
-				const line = doc.lineAt(position.line);
-				this.outputChannel.appendLine(`Line content: "${line.text.trim()}"`);
-
 				return { result: [] };
 			}
 
