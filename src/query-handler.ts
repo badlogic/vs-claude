@@ -282,6 +282,12 @@ export class QueryHandler {
 			filtered = this.limitDepth(filtered, depth);
 		}
 
+		// Add file path to top-level symbols for consistency
+		const filePath = uri.fsPath;
+		for (const symbol of filtered) {
+			symbol.location = `${filePath}:${symbol.location}`;
+		}
+
 		return { result: filtered };
 	}
 
@@ -342,6 +348,11 @@ export class QueryHandler {
 
 					if (depth) {
 						filtered = this.limitDepth(filtered, depth);
+					}
+
+					// Add file path to top-level symbols for workspace queries
+					for (const symbol of filtered) {
+						symbol.location = `${filePath}:${symbol.location}`;
 					}
 
 					results.push(...filtered);
@@ -420,9 +431,9 @@ export class QueryHandler {
 						filtered = this.limitDepth(filtered, depth);
 					}
 
-					// Add file path to location for context
+					// Add file path to top-level symbols only
 					for (const symbol of filtered) {
-						this.addFilePathToSymbol(symbol, fileUri.fsPath);
+						symbol.location = `${fileUri.fsPath}:${symbol.location}`;
 					}
 
 					results.push(...filtered);
@@ -436,18 +447,6 @@ export class QueryHandler {
 		}
 
 		return { result: results };
-	}
-
-	private addFilePathToSymbol(symbol: Symbol, filePath: string): void {
-		// Prepend file path to location
-		symbol.location = `${filePath}:${symbol.location}`;
-
-		// Recursively update children
-		if (symbol.children) {
-			for (const child of symbol.children) {
-				this.addFilePathToSymbol(child, filePath);
-			}
-		}
 	}
 
 	private async getDiagnostics(request: DiagnosticsRequest): Promise<{ result: Diagnostic[] } | { error: string }> {
