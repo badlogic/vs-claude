@@ -595,11 +595,12 @@ export class QueryHandler {
 
 				if (filteredChildren.length > 0) {
 					// Has matching descendants: include this symbol as context with only the filtered children
+					const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
 					const sym: Symbol = {
 						name: symbol.name,
 						detail: symbol.detail,
 						kind: vscode.SymbolKind[symbol.kind],
-						location: this.formatRange(symbol.selectionRange),
+						location: this.formatRange(combinedRange),
 						children: filteredChildren,
 					};
 					result.push(sym);
@@ -612,11 +613,14 @@ export class QueryHandler {
 	}
 
 	private convertDocumentSymbol(symbol: vscode.DocumentSymbol, includeDetails?: boolean): Symbol {
+		// Use selectionRange start and range end for best location info
+		const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
+
 		const result: Symbol = {
 			name: symbol.name,
 			detail: symbol.detail,
 			kind: vscode.SymbolKind[symbol.kind],
-			location: this.formatRange(symbol.selectionRange),
+			location: this.formatRange(combinedRange),
 			children:
 				symbol.children && symbol.children.length > 0
 					? symbol.children.map((s) => this.convertDocumentSymbol(s, includeDetails))
