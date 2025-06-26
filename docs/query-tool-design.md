@@ -2,49 +2,110 @@
 
 The `query` tool allows Claude to get information about the codebase using VS Code's language intelligence features. This enables better code understanding than grep/ripgrep by leveraging Language Server Protocol (LSP) capabilities.
 
-## Bare Minimum Query Types
+## Implemented Query Types
 
 ### 1. Find Symbols
 ```json
 {
   "type": "findSymbols",
-  "query": "handle*",        // supports wildcards/partial matching
-  "path": "/path/to/file.ts" // optional - if provided, searches only in this file
+  "query": "handle*",        // supports glob patterns: *, ?, [abc], {a,b}
+  "path": "/path/to/file.ts", // optional - filter results to this file
+  "kind": "class,interface"   // optional - filter by symbol type
 }
 ```
-Returns: All symbols matching the query pattern with their locations and types
+
+Examples:
+- `"*"` - all symbols
+- `"get*"` - all getters
+- `"*Test"` - all test classes
+- `"{get,set}*"` - getters and setters
+- `"[A-Z]*Service"` - services starting with uppercase
+
+Returns: Symbol name, kind, full path with line:col ranges, container, and hover detail
 
 ### 2. Get File Outline
 ```json
 {
-  "type": "fileOutline",
-  "path": "/path/to/file.ts"
+  "type": "outline",
+  "path": "/path/to/file.ts",
+  "symbol": "Animation.get*",  // optional - filter with hierarchical patterns
+  "kind": "method,property",   // optional - filter by symbol type
+  "depth": 1                  // optional - limit depth (1 = top-level only)
 }
 ```
-Returns: All types, interfaces, classes, functions defined in the file with their line numbers
+
+Examples:
+- `"symbol": "Animation"` - show Animation class only
+- `"symbol": "Animation.*"` - show Animation's members
+- `"symbol": "Animation.get*"` - show Animation's getters
+- `"depth": 1` - show only top-level symbols
+
+Returns: Hierarchical tree structure with names, kinds, locations, and optional children
 
 ### 3. Get Diagnostics
 ```json
 {
   "type": "diagnostics",
-  "path": "/path/to/file.ts" // optional - if provided, shows only diagnostics for this file
+  "path": "/path/to/file.ts" // optional - if omitted, returns all workspace diagnostics
 }
 ```
-Returns: All errors and warnings with line numbers and messages
+
+Returns: File path with line:col, severity (error/warning/info), message, and source
 
 ### 4. Find References
 ```json
 {
   "type": "references",
-  "symbol": "processUser",      // symbol name to find
-  "path": "/path/to/file.ts"    // optional - search in specific file or workspace
+  "path": "/path/to/file.ts",  // required - file containing the symbol
+  "line": 42,                  // required - line number (1-based)
+  "character": 15              // optional - character position (1-based)
 }
 ```
-Returns: All locations where this symbol is used
 
-## Nice to Have Query Types
+Returns: All locations where the symbol at this position is referenced, with preview text
 
-### 5. Go to Definition
+## Pattern Matching
+
+All symbol queries support glob patterns via minimatch:
+- `*` - matches any number of characters
+- `?` - matches exactly one character  
+- `[abc]` - matches any character in the set
+- `[a-z]` - matches any character in the range
+- `{a,b,c}` - matches any of the alternatives
+
+Hierarchical queries use dot notation:
+- `ClassName.methodName` - specific method in a class
+- `ClassName.*` - all members of a class
+- `Namespace.Class.method*` - nested hierarchies
+
+## Response Format
+
+Queries can be single or batched:
+
+**Single query:**
+```json
+{"type": "findSymbols", "query": "handle*"}
+```
+
+**Batch query:**
+```json
+[
+  {"type": "findSymbols", "query": "handle*"},
+  {"type": "outline", "path": "/path/to/file.ts"}
+]
+```
+
+**Response format:**
+```json
+[
+  {"result": [...]},           // Success with results
+  {"error": "error message"}   // Failed query
+]
+```
+
+## Future Query Types
+
+### Go to Definition
 ```json
 {
   "type": "definition",

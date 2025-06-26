@@ -4,30 +4,43 @@
 
 # VS Claude
 
-A VS Code extension that enables Claude Code (or any other MCP-enabled tool) to control Visual Studio Code through the Model Context Protocol (MCP). This allows Claude to open files, navigate to specific lines, and create diff views directly in your VS Code editor.
+A VS Code extension that enables Claude (or any other MCP-enabled AI assistant) to control Visual Studio Code through the Model Context Protocol (MCP). This allows Claude to search your codebase, open files, navigate to specific lines, create diff views, and use VS Code's language intelligence directly in your VS Code editor.
 
 ## What is VS Claude?
 
 VS Claude acts as a bridge between Claude and your VS Code editor. When you're chatting with Claude about code, Claude can:
+
+- **Search and navigate code intelligently**
+  - "Find all classes in the workspace"
+  - "Show me all getter methods in the Animation class"
+  - "Find all test classes ending with 'Test'"
+  - "List all the types in this Dart file without their members"
+  - "Find all references to the processData function"
+  
 - **Open specific files in your VS Code editor**
   - "Open the main.go file in VS Code"
   - "Show me the package.json file in VS Code"
+  
 - **Highlight code ranges**
   - "Show me the main loop in glfw-example.cpp in VS Code"
   - "Find where we write to the channel file and highlight it in VS Code"
   - "Highlight all usages of the updatePhysics method in Skeleton.cs in VS Code"
   - "Show me all the error handling blocks in main.py in VS Code"
+  
 - **Show diffs between files**
   - "Compare old.js with new.js in VS Code"
   - "Show me the diff between config.json and config.backup.json in VS Code"
+  
 - **Show git diffs**
   - "Show me the git diff for Animation.java between branches 4.2 and 4.3-beta in VS Code"
   - "Show me git diff for State.ts, working vs last commit in VS Code"
   - "Show me what changed in main.py in the last commit in VS Code"
   - "Show the staged changes for UserService.java in VS Code"
-- **Navigate to symbols and functions**
-  - "Find the handleRequest function in VS Code"
-  - "Go to the definition of the UserService class in VS Code"
+  
+- **Get diagnostics and errors**
+  - "Show me all TypeScript errors in the workspace"
+  - "What errors are in the UserService.ts file?"
+  
 - **Work with multiple VS Code windows**
   - Claude will automatically detect and let you choose which window to use
 
@@ -73,6 +86,8 @@ vs-claude/
 │   ├── extension.ts       # Main extension entry point
 │   ├── window-manager.ts  # Window tracking and heartbeat
 │   ├── command-handler.ts # Executes MCP commands
+│   ├── open-handler.ts    # File opening and diff logic
+│   ├── query-handler.ts   # Language intelligence queries
 │   └── setup.ts          # MCP installation logic
 ├── mcp/                   # Go MCP server
 │   ├── main.go           # MCP server implementation
@@ -81,7 +96,9 @@ vs-claude/
 │   └── build-binaries.sh # Cross-platform Go build
 ├── out/                  # Compiled TypeScript (generated)
 ├── bin/                  # Compiled Go binaries (generated)
-└── examples/             # Usage examples
+└── docs/                 # Documentation
+    ├── open-tool-design.md
+    └── query-tool-design.md
 
 ```
 
@@ -104,6 +121,19 @@ npm run build:go
 2. Press F5 to launch a new VS Code window with the extension loaded
 3. The debug console will show extension logs
 4. Set breakpoints in the TypeScript code as needed
+
+### Testing the Query Tool
+
+The extension includes a built-in query tester:
+
+1. Open Command Palette (Ctrl+Shift+P or Cmd+Shift+P)
+2. Run `VS Claude: Test Query Tool`
+3. Use the web UI to test different query types
+
+Example queries to try:
+- Find all classes: `query="*" kind="class"`
+- Find getters in a class: `symbol="ClassName.get*"`
+- List top-level types: `depth="1" kind="class,interface"`
 
 ### Debugging the MCP Server
 
@@ -136,17 +166,46 @@ echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-1
 
 ### Available MCP Tools
 
-- **openFile**: Opens a file at a specific line with optional range highlighting
-  - `path` (required): Absolute file path
-  - `line` (optional): Line number to jump to
-  - `endLine` (optional): End line for range highlight
-  - `windowId` (optional): Target specific VS Code window
+#### open
+Opens files, diffs, or navigates to specific locations in VS Code.
 
-- **openDiff**: Shows a diff view between two files
-  - `leftPath` (required): Original file path
-  - `rightPath` (required): Modified file path
-  - `title` (optional): Diff view title
-  - `windowId` (optional): Target specific VS Code window
+Supports multiple item types:
+- **file**: Open a file with optional line highlighting
+- **diff**: Compare two files side-by-side
+- **gitDiff**: Show git changes for a file
+
+Examples:
+```json
+{"type": "file", "path": "/path/to/file.ts", "startLine": 10, "endLine": 20}
+{"type": "diff", "left": "/path/to/old.js", "right": "/path/to/new.js"}
+{"type": "gitDiff", "path": "/path/to/file.ts", "from": "HEAD", "to": "working"}
+```
+
+#### query
+Queries VS Code's language intelligence for semantic code understanding.
+
+**Query Types:**
+
+1. **findSymbols** - Search for symbols across the workspace
+   - Supports glob patterns: `*`, `?`, `[abc]`, `{a,b}`
+   - Examples: `get*` (getters), `*Test` (test classes), `{get,set}*` (getters/setters)
+
+2. **outline** - Get file structure with filtering
+   - Supports hierarchical queries: `Animation.get*` (getters in Animation class)
+   - Use `depth: 1` to list only top-level symbols
+
+3. **diagnostics** - Get compilation errors and warnings
+   - Can be scoped to specific files or entire workspace
+
+4. **references** - Find all usages of a symbol
+   - Requires file path and line number
+
+Examples:
+```json
+{"type": "findSymbols", "query": "*Service", "kind": "class"}
+{"type": "outline", "path": "/path/to/file.java", "symbol": "Animation.*"}
+{"type": "references", "path": "/path/to/file.ts", "line": 42}
+```
 
 ### Development Commands
 
