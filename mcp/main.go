@@ -109,21 +109,21 @@ QUERY TYPES:
 
 1. findSymbols - Search symbols across entire workspace
    Required: query (string) - Symbol name with glob patterns (*, ?, [abc], {a,b})
-   Optional: path (string) - Filter to specific file
+   Optional: path (string) - Filter to specific file or folder
    Optional: kind (string) - Symbol types: class, method, function, interface, property, field, variable, constant, enum, namespace, module, struct, type
-   
+
    {"type": "findSymbols", "query": "UserService"}  // exact match
    {"type": "findSymbols", "query": "get*", "kind": "method"}  // all getter methods
-   {"type": "findSymbols", "query": "*Test", "kind": "class"}  // test classes  
+   {"type": "findSymbols", "query": "*Test", "kind": "class"}  // test classes
    {"type": "findSymbols", "query": "{get,set}*"}  // getters and setters
-   {"type": "findSymbols", "query": "[A-Z]*Service"}  // services with uppercase start
+   {"type": "findSymbols", "query": "*Service", "path": "/path/to/src"}  // services in src folder
 
-2. outline - Get file structure with hierarchy  
+2. outline - Get file structure with hierarchy
    Required: path (string) - Absolute file path
    Optional: symbol (string) - Filter with patterns, supports dot notation for scoping
    Optional: kind (string) - Comma-separated symbol types
    Optional: depth (number) - Limit tree depth (1 = top-level only)
-   
+
    {"type": "outline", "path": "/path/to/file.ts"}  // full file structure
    {"type": "outline", "path": "/path/to/file.ts", "depth": 1}  // top-level only
    {"type": "outline", "path": "/path/to/file.java", "symbol": "Animation.*"}  // Animation's members
@@ -132,28 +132,21 @@ QUERY TYPES:
 
 3. diagnostics - Get errors, warnings, and issues
    Optional: path (string) - Specific file or omit for entire workspace
-   
+
    {"type": "diagnostics"}  // all workspace diagnostics
    {"type": "diagnostics", "path": "/path/to/file.ts"}  // single file diagnostics
 
 4. references - Find all usages of symbol at specific location
-   Required: path (string) - File containing the symbol  
+   Required: path (string) - File containing the symbol
    Required: line (number) - Line number, 1-based
    Optional: character (number) - Column position, 1-based
-   
+
    {"type": "references", "path": "/path/to/file.ts", "line": 42}  // find usages
    {"type": "references", "path": "/path/to/file.ts", "line": 42, "character": 15}  // precise
 
-RETURN TYPES:
-- findSymbols: Array of {name, kind, path (with line:col-line:col range), containedIn?, detail?}
-- outline: Array of {name, kind, location (line:col-line:col), detail?, children?} - hierarchical
-- diagnostics: Array of {path (with line:col), severity, message, source?}
-- references: Array of {path (with line:col), preview}
-
 USAGE PATTERNS:
-- Find getters in class: First findSymbols "ClassName", then outline with symbol:"ClassName.get*"  
+- Find getters in class: First findSymbols "ClassName", then outline with symbol:"ClassName.get*"
 - Explore large files: Use outline with depth:1, then drill down with symbol filters
-- C++ headers/implementations: findSymbols shows both .h and .cpp locations
 
 LIMITATIONS:
 - Requires language server support (varies by file type and installed extensions)

@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 interface FindSymbolsRequest {
 	type: 'findSymbols';
 	query: string;
-	path?: string; // Optional: filter results to this file only
+	path?: string; // Optional: filter results to this file or folder
 	kind?: string;
 }
 
@@ -129,12 +129,13 @@ export class QueryHandler {
 			// Filter results
 			let filteredSymbols = await this.filterSymbols(workspaceSymbols, request.query, request.kind);
 
-			// If path is specified, filter to only that file
+			// If path is specified, filter to files under that path (file or folder)
 			if (request.path) {
 				const normalizedPath = vscode.Uri.file(request.path).fsPath;
 				filteredSymbols = filteredSymbols.filter((sym) => {
 					const symPath = sym.path.split(':')[0];
-					return symPath === normalizedPath;
+					// Check if symbol path starts with the provided path (works for both files and folders)
+					return symPath.startsWith(normalizedPath);
 				});
 			}
 
