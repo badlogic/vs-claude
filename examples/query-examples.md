@@ -28,6 +28,18 @@ Claude will use: `{"type": "findSymbols", "query": "*Test", "kind": "class"}`
 ```
 Claude will use: `{"type": "findSymbols", "query": "UserService"}`
 
+### Find members of a class
+```
+"What methods does the Pixmap class have?"
+```
+Claude will use: `{"type": "findSymbols", "query": "Pixmap.*", "kind": "method"}`
+
+### Find getters in a specific class
+```
+"Show me all getter methods in the Animation class"
+```
+Claude will use: `{"type": "findSymbols", "query": "Animation.get*"}`
+
 ## Exploring File Structure
 
 ### Get file outline
@@ -125,8 +137,9 @@ Claude will:
    - Find interfaces starting with I: `query: "I*", kind: "interface"`
 
 3. **Use hierarchical queries** - Navigate complex structures
-   - `Animation.*` - all members of Animation
-   - `Animation.get*` - all getters in Animation
+   - **In findSymbols**: `"Pixmap.get*"` - find getters in Pixmap class
+   - **In outline**: `"Animation.*"` - all members of Animation
+   - **In outline**: `"Animation.get*"` - all getters in Animation
    - `MyNamespace.MyClass.*` - nested hierarchies
 
 4. **Chain queries** - First find, then explore

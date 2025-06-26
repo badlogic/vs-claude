@@ -107,8 +107,8 @@ Error: [{"error": "error message"}]
 
 QUERY TYPES:
 
-1. findSymbols - Search symbols across entire workspace
-   Required: query (string) - Symbol name with glob patterns (*, ?, [abc], {a,b})
+1. findSymbols - Search symbols across workspace, folder, or file. Supports hierarchical queries.
+   Required: query (string) - Symbol name with glob patterns (*, ?, [abc], {a,b}) or hierarchical (Container.member*)
    Optional: path (string) - Filter to specific file or folder
    Optional: kind (string) - Symbol types: class, method, function, interface, property, field, variable, constant, enum, namespace, module, struct, type
 
@@ -117,6 +117,8 @@ QUERY TYPES:
    {"type": "findSymbols", "query": "*Test", "kind": "class"}  // test classes
    {"type": "findSymbols", "query": "{get,set}*"}  // getters and setters
    {"type": "findSymbols", "query": "*Service", "path": "/path/to/src"}  // services in src folder
+   {"type": "findSymbols", "query": "Pixmap.get*"}  // getters in Pixmap class
+   {"type": "findSymbols", "query": "Animation.*", "kind": "method"}  // methods in Animation
 
 2. outline - Get file structure with hierarchy
    Required: path (string) - Absolute file path
@@ -145,8 +147,9 @@ QUERY TYPES:
    {"type": "references", "path": "/path/to/file.ts", "line": 42, "character": 15}  // precise
 
 USAGE PATTERNS:
-- Find getters in class: First findSymbols "ClassName", then outline with symbol:"ClassName.get*"
+- Find class members: Use hierarchical queries like "ClassName.get*" or "ClassName.*"
 - Explore large files: Use outline with depth:1, then drill down with symbol filters
+- Find methods across classes: "*.methodName" finds methodName in all classes
 
 LIMITATIONS:
 - Requires language server support (varies by file type and installed extensions)

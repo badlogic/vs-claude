@@ -116,18 +116,42 @@ export class QueryHandler {
 		}
 
 		try {
-			// Always search workspace
+			let searchQuery = request.query;
+			let containerFilter: string | undefined;
+
+			// Check if query uses hierarchical pattern (e.g., "Pixmap.get*")
+			if (request.query.includes('.')) {
+				const parts = request.query.split('.');
+				// Search for the parent symbol
+				searchQuery = parts[0];
+				// The rest is the pattern to match within that container
+				containerFilter = parts.slice(1).join('.');
+			}
+
+			// Search workspace with the base query
 			const workspaceSymbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
 				'vscode.executeWorkspaceSymbolProvider',
-				request.query
+				searchQuery
 			);
 
 			if (!workspaceSymbols || workspaceSymbols.length === 0) {
-				return { error: `No symbols matching '${request.query}' found in workspace` };
+				return { error: `No symbols matching '${searchQuery}' found in workspace` };
 			}
 
-			// Filter results
-			let filteredSymbols = await this.filterSymbols(workspaceSymbols, request.query, request.kind);
+			let filteredSymbols: Symbol[];
+
+			if (containerFilter) {
+				// For hierarchical queries, we need to find symbols within the containers
+				filteredSymbols = await this.findSymbolsInContainers(
+					workspaceSymbols,
+					searchQuery,
+					containerFilter,
+					request.kind
+				);
+			} else {
+				// Regular filtering for non-hierarchical queries
+				filteredSymbols = await this.filterSymbols(workspaceSymbols, request.query, request.kind);
+			}
 
 			// If path is specified, filter to files under that path (file or folder)
 			if (request.path) {
@@ -417,6 +441,90 @@ export class QueryHandler {
 			}
 			return symbol;
 		});
+	}
+
+	private async findSymbolsInContainers(
+		containers: vscode.SymbolInformation[],
+		containerQuery: string,
+		memberPattern: string,
+		kindFilter?: string
+	): Promise<Symbol[]> {
+		const results: Symbol[] = [];
+
+		// First, filter containers to only those matching the container query
+		const matchingContainers = containers.filter((container) => this.matchesQuery(container.name, containerQuery));
+
+		// For each matching container, find members in the same file
+		for (const container of matchingContainers) {
+			// Get all symbols in the same file
+			const uri = container.location.uri;
+			const documentSymbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+				'vscode.executeDocumentSymbolProvider',
+				uri
+			);
+
+			if (documentSymbols && documentSymbols.length > 0) {
+				// Find the container in the document symbols
+				const containerSymbol = this.findSymbolByName(documentSymbols, container.name);
+				if (containerSymbol?.children) {
+					// Filter children by the member pattern
+					for (const child of containerSymbol.children) {
+						if (this.nameAndKindMatches(child.name, child.kind, memberPattern, kindFilter)) {
+							// Convert to our Symbol format
+							const symbol: Symbol = {
+								name: child.name,
+								kind: vscode.SymbolKind[child.kind],
+								path: `${uri.fsPath}:${this.formatRange(child.range)}`,
+								containedIn: container.name,
+							};
+							// Try to get detail/hover info
+							try {
+								const hoverInfos = await vscode.commands.executeCommand<vscode.Hover[]>(
+									'vscode.executeHoverProvider',
+									uri,
+									child.range.start
+								);
+								if (hoverInfos && hoverInfos.length > 0) {
+									let detail = '';
+									for (const hover of hoverInfos) {
+										for (const content of hover.contents) {
+											if (typeof content === 'string') {
+												detail += content.trim();
+											} else if ('value' in content) {
+												detail += content.value.trim();
+											}
+										}
+									}
+									if (detail) {
+										symbol.detail = detail;
+									}
+								}
+							} catch {
+								// Hover might not be available
+							}
+							results.push(symbol);
+						}
+					}
+				}
+			}
+		}
+
+		return results;
+	}
+
+	private findSymbolByName(symbols: vscode.DocumentSymbol[], name: string): vscode.DocumentSymbol | undefined {
+		for (const symbol of symbols) {
+			if (symbol.name === name) {
+				return symbol;
+			}
+			if (symbol.children?.length) {
+				const found = this.findSymbolByName(symbol.children, name);
+				if (found) {
+					return found;
+				}
+			}
+		}
+		return undefined;
 	}
 
 	private parseSymbolKinds(kindString: string): vscode.SymbolKind[] {
