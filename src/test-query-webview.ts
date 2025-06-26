@@ -167,6 +167,18 @@ export class TestQueryWebviewProvider {
 </head>
 <body>
     <h1>VS Claude Query Tool Tester</h1>
+    
+    <!-- Quick Examples -->
+    <div style="margin-bottom: 20px; padding: 15px; background-color: var(--vscode-textBlockQuote-background); border-radius: 4px;">
+        <h3 style="margin-top: 0;">Quick Examples to Try:</h3>
+        <ul style="margin: 0; padding-left: 20px;">
+            <li><strong>Find all classes:</strong> findSymbols query="*" kind="class"</li>
+            <li><strong>Find getters in a file:</strong> outline path="/your/file.ts" symbol="get*" kind="method"</li>
+            <li><strong>Find all test methods:</strong> findSymbols query="*test*" kind="method"</li>
+            <li><strong>Get class structure:</strong> outline path="/your/file.ts" symbol="YourClass"</li>
+            <li><strong>Find references:</strong> Use line number from findSymbols result</li>
+        </ul>
+    </div>
 
     <!-- Find Symbols -->
     <div class="query-section" id="findSymbols-section">
@@ -218,10 +230,16 @@ export class TestQueryWebviewProvider {
             <div class="input-group">
                 <label for="outline-symbol">Symbol (optional - supports wildcards like "get*", "set*"):</label>
                 <input type="text" id="outline-symbol" placeholder="ClassName or get*" />
+                <small style="display: block; margin-top: 4px; color: var(--vscode-descriptionForeground);">
+                    Examples: "MyClass" (exact), "get*" (all getters), "*Test" (all test classes), "handle*" (all handlers)
+                </small>
             </div>
             <div class="input-group">
                 <label for="outline-kind">Kind (optional - filter by symbol type):</label>
                 <input type="text" id="outline-kind" placeholder="method,property" />
+                <small style="display: block; margin-top: 4px; color: var(--vscode-descriptionForeground);">
+                    Same kinds as findSymbols. Combine with symbol for powerful filtering, e.g., symbol="get*" kind="method"
+                </small>
             </div>
             <button onclick="runFileOutline()">Get File Outline</button>
             <button onclick="clearResult('outline')">Clear</button>
@@ -264,6 +282,9 @@ export class TestQueryWebviewProvider {
             <div class="input-group">
                 <label for="references-character">Character Position (optional, 1-based):</label>
                 <input type="text" id="references-character" placeholder="15" />
+                <small style="display: block; margin-top: 4px; color: var(--vscode-descriptionForeground);">
+                    Tip: Use findSymbols first to locate a symbol, then use the line number from the result
+                </small>
             </div>
             <button onclick="runReferences()">Find References</button>
             <button onclick="clearResult('references')">Clear</button>
@@ -401,10 +422,8 @@ export class TestQueryWebviewProvider {
                         const resultDiv = document.getElementById(currentQueryType + '-result');
                         // The result is now an array of QueryResponse objects
                         const responses = message.result;
-                        console.log('Query result received:', responses);
                         if (Array.isArray(responses) && responses.length > 0) {
                             const response = responses[0]; // We only send single queries from the test UI
-                            console.log('First response:', response);
                             if (response.error) {
                                 resultDiv.className = 'result visible error';
                                 resultDiv.textContent = 'Error: ' + response.error;
@@ -414,11 +433,11 @@ export class TestQueryWebviewProvider {
                                 resultDiv.textContent = JSON.stringify(response.result, null, 2);
                             } else {
                                 resultDiv.className = 'result visible error';
-                                resultDiv.textContent = 'Error: Invalid response format - ' + JSON.stringify(response);
+                                resultDiv.textContent = 'Error: Invalid response format';
                             }
                         } else {
                             resultDiv.className = 'result visible error';
-                            resultDiv.textContent = 'Error: No response received - ' + JSON.stringify(responses);
+                            resultDiv.textContent = 'Error: No response received';
                         }
                     }
                     break;
