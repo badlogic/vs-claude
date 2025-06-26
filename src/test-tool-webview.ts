@@ -21,7 +21,7 @@ export class TestToolWebviewProvider {
 
 		this.panel = vscode.window.createWebviewPanel(
 			'vsClaudeTestTool',
-			'VS Claude Test Tool',
+			'VS Claude Query Test Tool',
 			vscode.ViewColumn.One,
 			{
 				enableScripts: true,
@@ -40,15 +40,7 @@ export class TestToolWebviewProvider {
 						this.panel?.webview.postMessage({
 							command: 'queryResult',
 							result,
-						});
-						break;
-					}
-					case 'runOpen': {
-						const result = await this.openHandler.execute(message.args);
-						logger.debug('TestToolWebview', 'Open result', result);
-						this.panel?.webview.postMessage({
-							command: 'openResult',
-							result,
+							queryType: message.queryType,
 						});
 						break;
 					}
@@ -56,32 +48,13 @@ export class TestToolWebviewProvider {
 						const activeEditor = vscode.window.activeTextEditor;
 						if (activeEditor) {
 							const position = activeEditor.selection.active;
+							const wordRange = activeEditor.document.getWordRangeAtPosition(position);
+							const word = wordRange ? activeEditor.document.getText(wordRange) : '';
 							this.panel?.webview.postMessage({
 								command: 'activeFile',
 								path: activeEditor.document.uri.fsPath,
 								line: position.line + 1,
 								column: position.character + 1,
-							});
-						}
-						break;
-					}
-					case 'getWorkspaceFiles': {
-						const files = await vscode.workspace.findFiles('**/*', '**/node_modules/**', 20);
-						const filePaths = files.map((f) => f.fsPath).sort();
-						this.panel?.webview.postMessage({
-							command: 'workspaceFiles',
-							files: filePaths,
-						});
-						break;
-					}
-					case 'getSymbolsAtPosition': {
-						const activeEditor = vscode.window.activeTextEditor;
-						if (activeEditor) {
-							const position = activeEditor.selection.active;
-							const wordRange = activeEditor.document.getWordRangeAtPosition(position);
-							const word = wordRange ? activeEditor.document.getText(wordRange) : '';
-							this.panel?.webview.postMessage({
-								command: 'symbolAtPosition',
 								symbol: word,
 							});
 						}
@@ -96,6 +69,9 @@ export class TestToolWebviewProvider {
 		this.panel.onDidDispose(() => {
 			this.panel = undefined;
 		});
+
+		// Request active file info
+		this.panel.webview.postMessage({ command: 'ready' });
 	}
 
 	private getWebviewContent(): string {
@@ -104,906 +80,749 @@ export class TestToolWebviewProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VS Claude Test Tool</title>
+    <title>VS Claude Query Test Tool</title>
     <style>
-        body {
-            font-family: var(--vscode-font-family);
-            color: var(--vscode-foreground);
-            background-color: var(--vscode-editor-background);
-            padding: 20px;
+        * {
+            box-sizing: border-box;
             margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 13px;
+            background: var(--vscode-editor-background);
+            color: var(--vscode-editor-foreground);
+            padding: 20px;
+            line-height: 1.5;
+        }
+
+        .container {
             max-width: 1400px;
             margin: 0 auto;
         }
-        
-        .header {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        
+
         h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 24px;
             color: var(--vscode-foreground);
-            font-size: 28px;
-            margin: 0;
-            font-weight: 600;
         }
-        
-        .tool-selector {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background-color: var(--vscode-input-background);
-            padding: 10px 15px;
-            border-radius: 6px;
-            border: 1px solid var(--vscode-input-border);
-        }
-        
-        .tool-selector label {
-            font-weight: 600;
-            margin: 0;
-        }
-        
-        select {
-            padding: 8px 12px;
-            background-color: var(--vscode-dropdown-background);
-            color: var(--vscode-dropdown-foreground);
-            border: 1px solid var(--vscode-dropdown-border);
-            border-radius: 4px;
-            font-family: var(--vscode-font-family);
-            font-size: 14px;
-            cursor: pointer;
-        }
-        
-        .main-content {
+
+        .query-sections {
             display: grid;
-            grid-template-columns: 1fr 350px;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
             gap: 20px;
-            margin-bottom: 20px;
         }
-        
-        .editor-section {
-            background-color: var(--vscode-input-background);
-            border: 1px solid var(--vscode-input-border);
-            border-radius: 6px;
-            padding: 20px;
-        }
-        
-        .sidebar {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        
-        .sidebar-section {
-            background-color: var(--vscode-sideBar-background);
+
+        .query-section {
+            background: var(--vscode-sideBar-background);
             border: 1px solid var(--vscode-panel-border);
             border-radius: 6px;
-            padding: 15px;
+            padding: 20px;
+            transition: border-color 0.2s;
         }
-        
-        .sidebar-section h3 {
-            margin: 0 0 12px 0;
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--vscode-foreground);
+
+        .query-section:hover {
+            border-color: var(--vscode-focusBorder);
         }
-        
-        .template-list {
+
+        .section-header {
             display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        
-        .template-button {
-            padding: 8px 12px;
-            background-color: var(--vscode-button-secondaryBackground);
-            color: var(--vscode-button-secondaryForeground);
-            border: 1px solid var(--vscode-button-border);
-            border-radius: 4px;
-            cursor: pointer;
-            font-family: var(--vscode-font-family);
-            font-size: 12px;
-            text-align: left;
-            transition: background-color 0.1s;
-        }
-        
-        .template-button:hover {
-            background-color: var(--vscode-button-secondaryHoverBackground);
-        }
-        
-        .template-button.primary {
-            background-color: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-        }
-        
-        .template-button.primary:hover {
-            background-color: var(--vscode-button-hoverBackground);
-        }
-        
-        .editor-header {
-            display: flex;
-            justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
+            justify-content: space-between;
+            margin-bottom: 16px;
         }
-        
-        .editor-title {
+
+        h2 {
             font-size: 16px;
             font-weight: 600;
-            margin: 0;
-        }
-        
-        .editor-actions {
-            display: flex;
-            gap: 8px;
-        }
-        
-        .icon-button {
-            padding: 6px;
-            background-color: transparent;
             color: var(--vscode-foreground);
-            border: 1px solid transparent;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 16px;
-            line-height: 1;
-            transition: background-color 0.1s;
         }
-        
-        .icon-button:hover {
-            background-color: var(--vscode-toolbar-hoverBackground);
-            border-color: var(--vscode-toolbar-hoverBorder);
+
+        .field-group {
+            margin-bottom: 12px;
         }
-        
-        .json-editor {
+
+        label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--vscode-foreground);
+            margin-bottom: 4px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select {
             width: 100%;
-            min-height: 300px;
-            padding: 12px;
-            background-color: var(--vscode-editor-background);
-            color: var(--vscode-editor-foreground);
-            border: 1px solid var(--vscode-editorWidget-border);
+            padding: 6px 10px;
+            background: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border: 1px solid var(--vscode-input-border);
             border-radius: 4px;
-            font-family: var(--vscode-editor-font-family);
-            font-size: var(--vscode-editor-font-size);
-            resize: vertical;
-            tab-size: 2;
+            font-size: 13px;
+            font-family: inherit;
         }
-        
-        .json-editor:focus {
+
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        select:focus {
             outline: none;
             border-color: var(--vscode-focusBorder);
         }
-        
-        .action-buttons {
+
+        .checkbox-group {
             display: flex;
-            gap: 10px;
-            margin-top: 15px;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
         }
-        
+
+        input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .multi-select {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .kind-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            background: var(--vscode-button-secondaryBackground);
+            border: 1px solid var(--vscode-button-border);
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: background-color 0.2s;
+        }
+
+        .kind-checkbox:hover {
+            background: var(--vscode-button-secondaryHoverBackground);
+        }
+
+        .kind-checkbox input {
+            width: 14px;
+            height: 14px;
+            margin: 0;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
         button {
-            padding: 8px 16px;
-            background-color: var(--vscode-button-background);
+            padding: 6px 14px;
+            background: var(--vscode-button-background);
             color: var(--vscode-button-foreground);
             border: none;
             border-radius: 4px;
-            cursor: pointer;
-            font-family: var(--vscode-font-family);
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 500;
-            transition: background-color 0.1s;
+            cursor: pointer;
+            transition: background-color 0.2s;
         }
-        
+
         button:hover {
-            background-color: var(--vscode-button-hoverBackground);
+            background: var(--vscode-button-hoverBackground);
         }
-        
+
         button.secondary {
-            background-color: var(--vscode-button-secondaryBackground);
+            background: var(--vscode-button-secondaryBackground);
             color: var(--vscode-button-secondaryForeground);
         }
-        
+
         button.secondary:hover {
-            background-color: var(--vscode-button-secondaryHoverBackground);
+            background: var(--vscode-button-secondaryHoverBackground);
         }
-        
-        .result-section {
-            background-color: var(--vscode-editor-background);
-            border: 1px solid var(--vscode-panel-border);
-            border-radius: 6px;
-            padding: 20px;
-            display: none;
-        }
-        
-        .result-section.visible {
-            display: block;
-        }
-        
-        .result-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-        
-        .result-title {
-            font-size: 16px;
-            font-weight: 600;
-            margin: 0;
-        }
-        
-        .result-content {
-            white-space: pre-wrap;
-            font-family: var(--vscode-editor-font-family);
-            font-size: var(--vscode-editor-font-size);
-            overflow-x: auto;
+
+        .result-container {
+            margin-top: 12px;
             max-height: 400px;
             overflow-y: auto;
-        }
-        
-        .success {
-            color: var(--vscode-testing-iconPassed);
-        }
-        
-        .error {
-            color: var(--vscode-testing-iconFailed);
-        }
-        
-        .history-item {
-            padding: 8px 12px;
-            background-color: var(--vscode-list-inactiveSelectionBackground);
+            background: var(--vscode-editor-background);
+            border: 1px solid var(--vscode-editorWidget-border);
             border-radius: 4px;
+            padding: 12px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            display: none;
+        }
+
+        .result-container.visible {
+            display: block;
+        }
+
+        .json-key {
+            color: #9CDCFE;
+        }
+
+        .json-string {
+            color: #CE9178;
+        }
+
+        .json-number {
+            color: #B5CEA8;
+        }
+
+        .json-boolean {
+            color: #569CD6;
+        }
+
+        .json-null {
+            color: #569CD6;
+            opacity: 0.7;
+        }
+
+        .json-punctuation {
+            color: var(--vscode-editor-foreground);
+            opacity: 0.6;
+        }
+
+        .error-result {
+            color: var(--vscode-errorForeground);
+        }
+
+        .location-link {
+            color: var(--vscode-textLink-foreground);
+            text-decoration: underline;
             cursor: pointer;
-            font-size: 12px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
-        
-        .history-item:hover {
-            background-color: var(--vscode-list-hoverBackground);
+
+        .location-link:hover {
+            color: var(--vscode-textLink-activeForeground);
         }
-        
-        .history-item-type {
-            font-weight: 600;
-            color: var(--vscode-symbolIcon-variableForeground);
-        }
-        
-        .tooltip {
-            position: relative;
-            display: inline-block;
-        }
-        
-        .tooltip .tooltiptext {
-            visibility: hidden;
-            width: 250px;
-            background-color: var(--vscode-editorHoverWidget-background);
-            color: var(--vscode-editorHoverWidget-foreground);
-            border: 1px solid var(--vscode-editorHoverWidget-border);
-            text-align: left;
-            border-radius: 4px;
-            padding: 8px 12px;
-            position: absolute;
-            z-index: 1;
-            bottom: 125%;
-            left: 50%;
-            margin-left: -125px;
-            font-size: 12px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
-        }
-        
-        .tooltip:hover .tooltiptext {
-            visibility: visible;
-        }
-        
+
         .help-text {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--vscode-descriptionForeground);
-            margin-top: 6px;
+            margin-top: 4px;
         }
-        
-        .divider {
-            height: 1px;
-            background-color: var(--vscode-panel-border);
-            margin: 12px 0;
-        }
-        
-        .active-file-info {
-            background-color: var(--vscode-editor-selectionBackground);
-            padding: 8px;
+
+        .active-context {
+            background: var(--vscode-editor-selectionBackground);
+            padding: 12px;
             border-radius: 4px;
+            margin-bottom: 20px;
             font-size: 12px;
-            line-height: 1.5;
         }
-        
-        @media (max-width: 900px) {
-            .main-content {
-                grid-template-columns: 1fr;
-            }
-            
-            .sidebar {
-                order: -1;
-            }
+
+        .context-item {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .context-label {
+            font-weight: 600;
+            color: var(--vscode-descriptionForeground);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--vscode-scrollbarSlider-background);
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--vscode-scrollbarSlider-hoverBackground);
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>VS Claude Test Tool</h1>
-        <div class="tool-selector">
-            <label for="toolSelect">Tool:</label>
-            <select id="toolSelect" onchange="switchTool()">
-                <option value="open">Open</option>
-                <option value="query">Query</option>
-            </select>
-        </div>
-        <button class="icon-button tooltip" onclick="loadFromClipboard()" style="margin-left: auto;">
-            <span>Clipboard</span>
-            <span class="tooltiptext">Load JSON from clipboard</span>
-        </button>
-    </div>
-    
-    <div class="main-content">
-        <div class="editor-section">
-            <div class="editor-header">
-                <h2 class="editor-title" id="editorTitle">Open Tool Arguments</h2>
-                <div class="editor-actions">
-                    <button class="icon-button tooltip" onclick="formatJSON()">
-                        <span>{ }</span>
-                        <span class="tooltiptext">Format JSON (Ctrl+Shift+F)</span>
-                    </button>
-                    <button class="icon-button tooltip" onclick="clearEditor()">
-                        <span>✕</span>
-                        <span class="tooltiptext">Clear editor</span>
-                    </button>
-                </div>
-            </div>
-            
-            <textarea id="jsonEditor" class="json-editor" placeholder="Enter tool arguments as JSON..." spellcheck="false"></textarea>
-            
-            <p class="help-text" id="helpText">
-                Enter a single item object or an array of items. Use the templates on the right for quick examples.
-            </p>
-            
-            <div class="action-buttons">
-                <button onclick="runTool()">Run Tool</button>
-                <button class="secondary" onclick="validateJSON()">Validate JSON</button>
-            </div>
-        </div>
+    <div class="container">
+        <h1>VS Claude Query Test Tool</h1>
         
-        <div class="sidebar">
-            <!-- Active File Section -->
-            <div class="sidebar-section">
-                <h3>Context</h3>
-                <div id="activeFileIndicator" class="help-text">
-                    <p>No active file</p>
-                </div>
+        <div class="active-context" id="activeContext" style="display: none;">
+            <div class="context-item">
+                <span class="context-label">Active File:</span>
+                <span id="contextFile">-</span>
             </div>
-            
-            <!-- Templates Section -->
-            <div class="sidebar-section" id="templatesSection">
-                <h3>Templates</h3>
-                <div class="template-list" id="openTemplates">
-                    <button class="template-button" onclick="insertTemplate('openSingleFile')">Single File</button>
-                    <button class="template-button" onclick="insertTemplate('openFileWithLines')">File with Line Range</button>
-                    <button class="template-button" onclick="insertTemplate('openMultipleFiles')">Multiple Files</button>
-                    <button class="template-button" onclick="insertTemplate('openDiff')">Compare Files</button>
-                    <button class="template-button" onclick="insertTemplate('openGitDiffWorking')">Git Diff (Working)</button>
-                    <button class="template-button" onclick="insertTemplate('openGitDiffStaged')">Git Diff (Staged)</button>
-                    <button class="template-button" onclick="insertTemplate('openGitDiffCommits')">Git Diff (Commits)</button>
-                    <button class="template-button" onclick="insertTemplate('openSymbol')">Open Symbol</button>
-                    <button class="template-button primary" onclick="insertTemplate('openCurrentFile')">Use Current File</button>
-                </div>
-                
-                <div class="template-list" id="queryTemplates" style="display: none;">
-                    <button class="template-button" onclick="insertTemplate('queryAllSymbols')">All Symbols</button>
-                    <button class="template-button" onclick="insertTemplate('queryFindClass')">Find Classes</button>
-                    <button class="template-button" onclick="insertTemplate('queryFindMethods')">Find Methods</button>
-                    <button class="template-button" onclick="insertTemplate('queryFileOutline')">File Outline</button>
-                    <button class="template-button" onclick="insertTemplate('queryDiagnostics')">Get Diagnostics</button>
-                    <button class="template-button" onclick="insertTemplate('queryReferences')">Find References</button>
-                    <button class="template-button" onclick="insertTemplate('queryMultiple')">Multiple Queries</button>
-                    <button class="template-button" onclick="insertTemplate('queryCurrentSymbol')">Current Symbol Refs</button>
-                    <button class="template-button primary" onclick="insertTemplate('queryCurrentFile')">Use Current File</button>
-                </div>
+            <div class="context-item">
+                <span class="context-label">Position:</span>
+                <span id="contextPosition">-</span>
             </div>
-            
-            <!-- Quick Insert Section -->
-            <div class="sidebar-section">
-                <h3>Quick Insert</h3>
-                <div id="quickInsertOpen" class="template-list">
-                    <button class="template-button" onclick="insertSnippet('fileItem')">File Item</button>
-                    <button class="template-button" onclick="insertSnippet('diffItem')">Diff Item</button>
-                    <button class="template-button" onclick="insertSnippet('gitDiffItem')">Git Diff Item</button>
-                </div>
-                
-                <div id="quickInsertQuery" class="template-list" style="display: none;">
-                    <button class="template-button" onclick="insertSnippet('symbolsQuery')">Symbols Query</button>
-                    <button class="template-button" onclick="insertSnippet('fileOutlineQuery')">File Outline</button>
-                    <button class="template-button" onclick="insertSnippet('referencesQuery')">References Query</button>
-                    <button class="template-button" onclick="insertSnippet('diagnosticsQuery')">Diagnostics Query</button>
-                </div>
-            </div>
-            
-            <!-- History Section -->
-            <div class="sidebar-section">
-                <h3>Recent Commands</h3>
-                <div id="historyList" class="template-list">
-                    <p class="help-text">No recent commands</p>
-                </div>
+            <div class="context-item">
+                <span class="context-label">Symbol:</span>
+                <span id="contextSymbol">-</span>
             </div>
         </div>
-    </div>
-    
-    <div class="result-section" id="resultSection">
-        <div class="result-header">
-            <h2 class="result-title">Result</h2>
-            <div class="editor-actions">
-                <button class="icon-button tooltip" onclick="copyResult()">
-                    <span>📋</span>
-                    <span class="tooltiptext">Copy result</span>
-                </button>
-                <button class="icon-button tooltip" onclick="clearResult()">
-                    <span>✕</span>
-                    <span class="tooltiptext">Clear result</span>
-                </button>
+
+        <div class="query-sections">
+            <!-- Find Symbols -->
+            <div class="query-section">
+                <div class="section-header">
+                    <h2>Find Symbols</h2>
+                </div>
+                
+                <div class="field-group">
+                    <label for="symbols-query">Query Pattern</label>
+                    <input type="text" id="symbols-query" placeholder="e.g., Animation, get*, *.render">
+                    <div class="help-text">Use * for wildcards, e.g., get*, Animation.*, or just *</div>
+                </div>
+                
+                <div class="field-group">
+                    <label for="symbols-path">Path (optional)</label>
+                    <input type="text" id="symbols-path" placeholder="/path/to/file.ts or /path/to/folder">
+                </div>
+                
+                <div class="field-group">
+                    <label>Symbol Kinds (optional)</label>
+                    <div class="multi-select">
+                        <label class="kind-checkbox"><input type="checkbox" value="class"> Class</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="method"> Method</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="function"> Function</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="property"> Property</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="interface"> Interface</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="variable"> Variable</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="constant"> Constant</label>
+                        <label class="kind-checkbox"><input type="checkbox" value="enum"> Enum</label>
+                    </div>
+                </div>
+                
+                <div class="field-group">
+                    <label for="symbols-exclude">Exclude Patterns (optional)</label>
+                    <input type="text" id="symbols-exclude" placeholder="**/node_modules/**, **/test/**">
+                    <div class="help-text">Comma-separated glob patterns</div>
+                </div>
+                
+                <div class="checkbox-group">
+                    <input type="checkbox" id="symbols-countOnly">
+                    <label for="symbols-countOnly">Count Only</label>
+                </div>
+                
+                <div class="button-group">
+                    <button onclick="runSymbolsQuery()">Run Query</button>
+                    <button class="secondary" onclick="clearSymbols()">Clear</button>
+                </div>
+                
+                <div id="symbols-result" class="result-container"></div>
+            </div>
+
+            <!-- Find References -->
+            <div class="query-section">
+                <div class="section-header">
+                    <h2>Find References</h2>
+                </div>
+                
+                <div class="field-group">
+                    <label for="references-path">File Path</label>
+                    <input type="text" id="references-path" placeholder="/path/to/file.ts" required>
+                </div>
+                
+                <div class="field-group">
+                    <label for="references-line">Line Number</label>
+                    <input type="number" id="references-line" placeholder="42" min="1" required>
+                </div>
+                
+                <div class="field-group">
+                    <label for="references-column">Column Number</label>
+                    <input type="number" id="references-column" placeholder="15" min="1" required>
+                </div>
+                
+                <div class="button-group">
+                    <button onclick="runReferencesQuery()">Run Query</button>
+                    <button class="secondary" onclick="clearReferences()">Clear</button>
+                    <button class="secondary" onclick="useActivePosition('references')">Use Active</button>
+                </div>
+                
+                <div id="references-result" class="result-container"></div>
+            </div>
+
+            <!-- Get Definition -->
+            <div class="query-section">
+                <div class="section-header">
+                    <h2>Get Definition</h2>
+                </div>
+                
+                <div class="field-group">
+                    <label for="definition-path">File Path</label>
+                    <input type="text" id="definition-path" placeholder="/path/to/file.ts" required>
+                </div>
+                
+                <div class="field-group">
+                    <label for="definition-line">Line Number</label>
+                    <input type="number" id="definition-line" placeholder="42" min="1" required>
+                </div>
+                
+                <div class="field-group">
+                    <label for="definition-column">Column Number</label>
+                    <input type="number" id="definition-column" placeholder="15" min="1" required>
+                </div>
+                
+                <div class="button-group">
+                    <button onclick="runDefinitionQuery()">Run Query</button>
+                    <button class="secondary" onclick="clearDefinition()">Clear</button>
+                    <button class="secondary" onclick="useActivePosition('definition')">Use Active</button>
+                </div>
+                
+                <div id="definition-result" class="result-container"></div>
+            </div>
+
+            <!-- Type Hierarchy -->
+            <div class="query-section">
+                <div class="section-header">
+                    <h2>Type Hierarchy</h2>
+                </div>
+                
+                <div class="field-group">
+                    <label for="hierarchy-type">Hierarchy Type</label>
+                    <select id="hierarchy-type">
+                        <option value="supertype">Supertypes</option>
+                        <option value="subtype">Subtypes</option>
+                    </select>
+                </div>
+                
+                <div class="field-group">
+                    <label for="hierarchy-path">File Path</label>
+                    <input type="text" id="hierarchy-path" placeholder="/path/to/file.ts" required>
+                </div>
+                
+                <div class="field-group">
+                    <label for="hierarchy-line">Line Number</label>
+                    <input type="number" id="hierarchy-line" placeholder="42" min="1" required>
+                </div>
+                
+                <div class="field-group">
+                    <label for="hierarchy-column">Column Number</label>
+                    <input type="number" id="hierarchy-column" placeholder="15" min="1" required>
+                </div>
+                
+                <div class="button-group">
+                    <button onclick="runHierarchyQuery()">Run Query</button>
+                    <button class="secondary" onclick="clearHierarchy()">Clear</button>
+                    <button class="secondary" onclick="useActivePosition('hierarchy')">Use Active</button>
+                </div>
+                
+                <div id="hierarchy-result" class="result-container"></div>
+            </div>
+
+            <!-- File Outline -->
+            <div class="query-section">
+                <div class="section-header">
+                    <h2>File Outline</h2>
+                </div>
+                
+                <div class="field-group">
+                    <label for="outline-path">File Path</label>
+                    <input type="text" id="outline-path" placeholder="/path/to/file.ts" required>
+                </div>
+                
+                <div class="field-group">
+                    <label for="outline-symbol">Symbol Name (optional)</label>
+                    <input type="text" id="outline-symbol" placeholder="ClassName">
+                    <div class="help-text">Show outline for specific symbol only</div>
+                </div>
+                
+                <div class="field-group">
+                    <label for="outline-kind">Symbol Kind (optional)</label>
+                    <select id="outline-kind">
+                        <option value="">All</option>
+                        <option value="method">Methods</option>
+                        <option value="property">Properties</option>
+                        <option value="field">Fields</option>
+                        <option value="class">Classes</option>
+                        <option value="interface">Interfaces</option>
+                        <option value="function">Functions</option>
+                    </select>
+                </div>
+                
+                <div class="button-group">
+                    <button onclick="runOutlineQuery()">Run Query</button>
+                    <button class="secondary" onclick="clearOutline()">Clear</button>
+                    <button class="secondary" onclick="useActiveFile('outline')">Use Active</button>
+                </div>
+                
+                <div id="outline-result" class="result-container"></div>
+            </div>
+
+            <!-- Diagnostics -->
+            <div class="query-section">
+                <div class="section-header">
+                    <h2>Diagnostics</h2>
+                </div>
+                
+                <div class="field-group">
+                    <label for="diagnostics-path">File Path (optional)</label>
+                    <input type="text" id="diagnostics-path" placeholder="/path/to/file.ts or leave empty for all">
+                    <div class="help-text">Leave empty to get all workspace diagnostics</div>
+                </div>
+                
+                <div class="button-group">
+                    <button onclick="runDiagnosticsQuery()">Run Query</button>
+                    <button class="secondary" onclick="clearDiagnostics()">Clear</button>
+                    <button class="secondary" onclick="useActiveFile('diagnostics')">Use Active</button>
+                </div>
+                
+                <div id="diagnostics-result" class="result-container"></div>
             </div>
         </div>
-        <pre class="result-content" id="resultContent"></pre>
     </div>
 
     <script>
         const vscode = acquireVsCodeApi();
-        let currentTool = 'open';
-        let currentFilePath = '';
-        let currentLine = 1;
-        let currentColumn = 1;
-        let currentSymbol = '';
-        let workspaceFiles = [];
-        let commandHistory = [];
-        
+        let activeFile = { path: '', line: 1, column: 1, symbol: '' };
+
         // Initialize
-        window.addEventListener('load', () => {
-            loadHistory();
-            vscode.postMessage({ command: 'getActiveFile' });
-            vscode.postMessage({ command: 'getWorkspaceFiles' });
-            vscode.postMessage({ command: 'getSymbolsAtPosition' });
-            
-            // Add keyboard shortcuts
-            document.getElementById('jsonEditor').addEventListener('keydown', (e) => {
-                if (e.ctrlKey && e.shiftKey && e.key === 'F') {
-                    e.preventDefault();
-                    formatJSON();
-                }
-                if (e.ctrlKey && e.key === 'Enter') {
-                    e.preventDefault();
-                    runTool();
-                }
-            });
-            
-            // Auto-save to localStorage
-            document.getElementById('jsonEditor').addEventListener('input', () => {
-                localStorage.setItem('vsClaudeTestToolLastContent', document.getElementById('jsonEditor').value);
-            });
-            
-            // Restore last content
-            const lastContent = localStorage.getItem('vsClaudeTestToolLastContent');
-            if (lastContent) {
-                document.getElementById('jsonEditor').value = lastContent;
-            }
-        });
-        
-        // Tool switching
-        function switchTool() {
-            currentTool = document.getElementById('toolSelect').value;
-            document.getElementById('editorTitle').textContent = currentTool === 'open' ? 'Open Tool Arguments' : 'Query Tool Arguments';
-            
-            // Toggle templates
-            document.getElementById('openTemplates').style.display = currentTool === 'open' ? 'flex' : 'none';
-            document.getElementById('queryTemplates').style.display = currentTool === 'query' ? 'flex' : 'none';
-            
-            // Toggle quick insert
-            document.getElementById('quickInsertOpen').style.display = currentTool === 'open' ? 'flex' : 'none';
-            document.getElementById('quickInsertQuery').style.display = currentTool === 'query' ? 'flex' : 'none';
-            
-            // Update help text
-            const helpText = currentTool === 'open' 
-                ? 'Enter a single item object or an array of items. Use the templates on the right for quick examples.'
-                : 'Enter a single query object or an array of query objects. Use the templates for common patterns.';
-            document.getElementById('helpText').textContent = helpText;
-        }
-        
-        // Templates
-        const templates = {
-            // Open templates
-            openSingleFile: {
-                type: 'file',
-                path: '/path/to/file.ts'
-            },
-            openFileWithLines: {
-                type: 'file',
-                path: '/path/to/file.ts',
-                startLine: 10,
-                endLine: 20
-            },
-            openMultipleFiles: [
-                { type: 'file', path: '/path/to/file1.ts' },
-                { type: 'file', path: '/path/to/file2.ts', startLine: 42 }
-            ],
-            openDiff: {
-                type: 'diff',
-                left: '/path/to/old.ts',
-                right: '/path/to/new.ts',
-                title: 'Compare Changes'
-            },
-            openGitDiffWorking: {
-                type: 'gitDiff',
-                path: '/path/to/file.ts',
-                from: 'HEAD',
-                to: 'working'
-            },
-            openGitDiffStaged: {
-                type: 'gitDiff',
-                path: '/path/to/file.ts',
-                from: 'HEAD',
-                to: 'staged'
-            },
-            openGitDiffCommits: {
-                type: 'gitDiff',
-                path: '/path/to/file.ts',
-                from: 'HEAD~1',
-                to: 'HEAD'
-            },
-            openCurrentFile: {
-                type: 'file',
-                path: ''
-            },
-            openSymbol: {
-                type: 'symbol',
-                query: ''
-            },
-            
-            // Query templates
-            queryAllSymbols: {
-                type: 'findSymbols',
-                query: '*'
-            },
-            queryFindClass: {
-                type: 'findSymbols',
-                query: 'MyClass',
-                kind: 'class'
-            },
-            queryFindMethods: {
-                type: 'findSymbols',
-                query: 'get*',
-                kind: 'method'
-            },
-            queryFileOutline: {
-                type: 'fileOutline',
-                path: '/path/to/file.ts'
-            },
-            queryDiagnostics: {
-                type: 'diagnostics'
-            },
-            queryReferences: {
-                type: 'references',
-                symbol: 'myFunction'
-            },
-            queryMultiple: [
-                { type: 'findSymbols', query: 'Animation', kind: 'class' },
-                { type: 'fileOutline', path: '/path/to/file.ts', symbol: 'Animation' },
-                { type: 'diagnostics' }
-            ],
-            queryCurrentFile: {
-                type: 'fileOutline',
-                path: ''
-            },
-            queryCurrentSymbol: {
-                type: 'references',
-                symbol: ''
-            }
-        };
-        
-        // Snippets
-        const snippets = {
-            fileItem: {
-                type: 'file',
-                path: '/path/to/file.ts',
-                startLine: 1,
-                endLine: 10
-            },
-            diffItem: {
-                type: 'diff',
-                left: '/path/to/old.ts',
-                right: '/path/to/new.ts'
-            },
-            gitDiffItem: {
-                type: 'gitDiff',
-                path: '/path/to/file.ts',
-                from: 'HEAD',
-                to: 'working'
-            },
-            symbolsQuery: {
-                type: 'findSymbols',
-                query: '*',
-                kind: 'class'
-            },
-            fileOutlineQuery: {
-                type: 'fileOutline',
-                path: '/path/to/file.ts'
-            },
-            referencesQuery: {
-                type: 'references',
-                symbol: 'mySymbol'
-            },
-            diagnosticsQuery: {
-                type: 'diagnostics',
-                path: '/path/to/file.ts'
-            }
-        };
-        
-        function insertTemplate(templateName) {
-            let template = templates[templateName];
-            
-            // Handle current file templates
-            if (templateName === 'openCurrentFile' && currentFilePath) {
-                template = { ...template, path: currentFilePath };
-            }
-            if (templateName === 'queryCurrentFile' && currentFilePath) {
-                template = { ...template, path: currentFilePath };
-            }
-            if (templateName === 'openSymbol' && currentSymbol) {
-                template = { ...template, query: currentSymbol };
-            }
-            if (templateName === 'queryCurrentSymbol' && currentSymbol) {
-                template = { ...template, symbol: currentSymbol };
-            }
-            
-            const editor = document.getElementById('jsonEditor');
-            editor.value = JSON.stringify(template, null, 2);
-            formatJSON();
-        }
-        
-        function insertSnippet(snippetName) {
-            const snippet = snippets[snippetName];
-            const editor = document.getElementById('jsonEditor');
-            
-            let currentValue = editor.value.trim();
-            if (!currentValue) {
-                editor.value = JSON.stringify(snippet, null, 2);
-            } else {
-                try {
-                    const current = JSON.parse(currentValue);
-                    if (Array.isArray(current)) {
-                        current.push(snippet);
-                        editor.value = JSON.stringify(current, null, 2);
-                    } else {
-                        editor.value = JSON.stringify([current, snippet], null, 2);
-                    }
-                } catch (e) {
-                    // If current value is invalid JSON, replace it
-                    editor.value = JSON.stringify(snippet, null, 2);
-                }
-            }
-            formatJSON();
-        }
-        
-        function formatJSON() {
-            const editor = document.getElementById('jsonEditor');
-            try {
-                const json = JSON.parse(editor.value);
-                editor.value = JSON.stringify(json, null, 2);
-                editor.style.borderColor = '';
-            } catch (e) {
-                editor.style.borderColor = 'var(--vscode-inputValidation-errorBorder)';
-            }
-        }
-        
-        function validateJSON() {
-            const editor = document.getElementById('jsonEditor');
-            try {
-                JSON.parse(editor.value);
-                showResult('Valid JSON!', 'success');
-            } catch (e) {
-                showResult('Invalid JSON: ' + e.message, 'error');
-            }
-        }
-        
-        function clearEditor() {
-            document.getElementById('jsonEditor').value = '';
-            document.getElementById('jsonEditor').style.borderColor = '';
-        }
-        
-        function runTool() {
-            const editor = document.getElementById('jsonEditor');
-            let args;
-            
-            try {
-                args = JSON.parse(editor.value);
-            } catch (e) {
-                showResult('Invalid JSON: ' + e.message, 'error');
-                return;
-            }
-            
-            // Save to history
-            addToHistory(currentTool, args);
-            
-            // Show loading
-            showResult('Running ' + currentTool + ' tool...', '');
-            
-            // Send message
-            if (currentTool === 'open') {
-                vscode.postMessage({
-                    command: 'runOpen',
-                    args: args
-                });
-            } else {
-                vscode.postMessage({
-                    command: 'runQuery',
-                    query: args
-                });
-            }
-        }
-        
-        function showResult(content, className) {
-            const resultSection = document.getElementById('resultSection');
-            const resultContent = document.getElementById('resultContent');
-            
-            resultSection.classList.add('visible');
-            resultContent.textContent = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
-            resultContent.className = 'result-content ' + className;
-        }
-        
-        function clearResult() {
-            document.getElementById('resultSection').classList.remove('visible');
-        }
-        
-        function copyResult() {
-            const content = document.getElementById('resultContent').textContent;
-            navigator.clipboard.writeText(content).then(() => {
-                // Show feedback
-                const button = event.target.closest('.icon-button');
-                const originalText = button.querySelector('span').textContent;
-                button.querySelector('span').textContent = '✓';
-                setTimeout(() => {
-                    button.querySelector('span').textContent = originalText;
-                }, 1000);
-            });
-        }
-        
-        // History management
-        function addToHistory(tool, args) {
-            const item = {
-                tool: tool,
-                args: args,
-                timestamp: Date.now()
-            };
-            
-            commandHistory.unshift(item);
-            if (commandHistory.length > 10) {
-                commandHistory = commandHistory.slice(0, 10);
-            }
-            
-            saveHistory();
-            updateHistoryUI();
-        }
-        
-        function saveHistory() {
-            localStorage.setItem('vsClaudeTestToolHistory', JSON.stringify(commandHistory));
-        }
-        
-        function loadHistory() {
-            const saved = localStorage.getItem('vsClaudeTestToolHistory');
-            if (saved) {
-                try {
-                    commandHistory = JSON.parse(saved);
-                    updateHistoryUI();
-                } catch (e) {
-                    commandHistory = [];
-                }
-            }
-        }
-        
-        function updateHistoryUI() {
-            const historyList = document.getElementById('historyList');
-            if (commandHistory.length === 0) {
-                historyList.innerHTML = '<p class="help-text">No recent commands</p>';
-                return;
-            }
-            
-            historyList.innerHTML = commandHistory.map((item, index) => {
-                const preview = JSON.stringify(item.args).substring(0, 50) + '...';
-                return \`<div class="history-item" onclick="loadFromHistory(\${index})">
-                    <span class="history-item-type">\${item.tool}</span> - \${preview}
-                </div>\`;
-            }).join('');
-        }
-        
-        function loadFromHistory(index) {
-            const item = commandHistory[index];
-            document.getElementById('toolSelect').value = item.tool;
-            switchTool();
-            document.getElementById('jsonEditor').value = JSON.stringify(item.args, null, 2);
-        }
-        
-        // Message handling
         window.addEventListener('message', event => {
             const message = event.data;
             switch (message.command) {
-                case 'queryResult':
-                    handleQueryResult(message.result);
-                    break;
-                case 'openResult':
-                    handleOpenResult(message.result);
+                case 'ready':
+                    vscode.postMessage({ command: 'getActiveFile' });
                     break;
                 case 'activeFile':
-                    currentFilePath = message.path;
-                    currentLine = message.line || 1;
-                    currentColumn = message.column || 1;
-                    updateActiveFileIndicator();
+                    activeFile = {
+                        path: message.path,
+                        line: message.line,
+                        column: message.column,
+                        symbol: message.symbol
+                    };
+                    updateActiveContext();
                     break;
-                case 'workspaceFiles':
-                    workspaceFiles = message.files;
-                    break;
-                case 'symbolAtPosition':
-                    currentSymbol = message.symbol;
-                    updateActiveFileIndicator();
+                case 'queryResult':
+                    handleQueryResult(message.result, message.queryType);
                     break;
             }
         });
-        
-        function handleQueryResult(result) {
+
+        function updateActiveContext() {
+            const contextEl = document.getElementById('activeContext');
+            if (activeFile.path) {
+                contextEl.style.display = 'block';
+                document.getElementById('contextFile').textContent = activeFile.path.split('/').pop();
+                document.getElementById('contextPosition').textContent = \`\${activeFile.line}:\${activeFile.column}\`;
+                document.getElementById('contextSymbol').textContent = activeFile.symbol || '-';
+            }
+        }
+
+        function formatJson(obj) {
+            const json = JSON.stringify(obj, null, 2);
+            return json
+                .replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
+                .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
+                .replace(/: (\\d+)/g, ': <span class="json-number">$1</span>')
+                .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
+                .replace(/: null/g, ': <span class="json-null">null</span>')
+                .replace(/([{}\\[\\],])/g, '<span class="json-punctuation">$1</span>')
+                // Make file paths clickable in location strings
+                .replace(/\\"([^\\"]+\\.\\w+):(\\d+):(\\d+)\\"/g, '<span class="location-link" data-path="$1" data-line="$2" data-column="$3">"$1:$2:$3"</span>');
+        }
+
+        function handleQueryResult(result, queryType) {
+            const resultEl = document.getElementById(\`\${queryType}-result\`);
+            if (!resultEl) return;
+
             if (Array.isArray(result) && result.length > 0) {
                 const response = result[0];
                 if (response.error) {
-                    showResult('Error: ' + response.error, 'error');
+                    resultEl.innerHTML = \`<div class="error-result">Error: \${response.error}</div>\`;
                 } else if (response.result) {
-                    showResult(response.result, 'success');
-                } else {
-                    showResult('Error: Invalid response format', 'error');
+                    resultEl.innerHTML = formatJson(response.result);
                 }
             } else {
-                showResult('Error: No response received', 'error');
+                resultEl.innerHTML = '<div class="error-result">No results</div>';
             }
-        }
-        
-        function handleOpenResult(result) {
-            if (result.success) {
-                showResult('Successfully opened items!', 'success');
-            } else {
-                showResult('Error: ' + (result.error || 'Unknown error'), 'error');
-            }
-        }
-        
-        function updateActiveFileIndicator() {
-            const indicator = document.getElementById('activeFileIndicator');
-            if (!indicator) return;
             
-            if (currentFilePath) {
-                const fileName = currentFilePath.split('/').pop();
-                indicator.innerHTML = \`
-                    <div class="active-file-info">
-                        <strong>Active:</strong> \${fileName} (\${currentLine}:\${currentColumn})
-                        \${currentSymbol ? \`<br><strong>Symbol:</strong> \${currentSymbol}\` : ''}
-                    </div>
-                \`;
+            resultEl.classList.add('visible');
+        }
+
+        // Query functions
+        function runSymbolsQuery() {
+            const query = document.getElementById('symbols-query').value || '*';
+            const path = document.getElementById('symbols-path').value;
+            const exclude = document.getElementById('symbols-exclude').value;
+            const countOnly = document.getElementById('symbols-countOnly').checked;
+            
+            const kinds = [];
+            document.querySelectorAll('.kind-checkbox input:checked').forEach(cb => {
+                kinds.push(cb.value);
+            });
+            
+            const request = { type: 'findSymbols', query };
+            if (path) request.path = path;
+            if (kinds.length > 0) request.kind = kinds.join(',');
+            if (exclude) request.exclude = exclude.split(',').map(p => p.trim());
+            if (countOnly) request.countOnly = true;
+            
+            vscode.postMessage({ command: 'runQuery', query: request, queryType: 'symbols' });
+        }
+
+        function runReferencesQuery() {
+            const path = document.getElementById('references-path').value;
+            const line = parseInt(document.getElementById('references-line').value);
+            const column = parseInt(document.getElementById('references-column').value);
+            
+            if (!path || !line || !column) {
+                alert('All fields are required');
+                return;
+            }
+            
+            const request = { type: 'references', path, line, column };
+            vscode.postMessage({ command: 'runQuery', query: request, queryType: 'references' });
+        }
+
+        function runDefinitionQuery() {
+            const path = document.getElementById('definition-path').value;
+            const line = parseInt(document.getElementById('definition-line').value);
+            const column = parseInt(document.getElementById('definition-column').value);
+            
+            if (!path || !line || !column) {
+                alert('All fields are required');
+                return;
+            }
+            
+            const request = { type: 'definition', path, line, column };
+            vscode.postMessage({ command: 'runQuery', query: request, queryType: 'definition' });
+        }
+
+        function runHierarchyQuery() {
+            const type = document.getElementById('hierarchy-type').value;
+            const path = document.getElementById('hierarchy-path').value;
+            const line = parseInt(document.getElementById('hierarchy-line').value);
+            const column = parseInt(document.getElementById('hierarchy-column').value);
+            
+            if (!path || !line || !column) {
+                alert('All fields are required');
+                return;
+            }
+            
+            const request = { type, path, line, column };
+            vscode.postMessage({ command: 'runQuery', query: request, queryType: 'hierarchy' });
+        }
+
+        function runOutlineQuery() {
+            const path = document.getElementById('outline-path').value;
+            const symbol = document.getElementById('outline-symbol').value;
+            const kind = document.getElementById('outline-kind').value;
+            
+            if (!path) {
+                alert('File path is required');
+                return;
+            }
+            
+            const request = { type: 'fileOutline', path };
+            if (symbol) request.symbol = symbol;
+            if (kind) request.kind = kind;
+            
+            vscode.postMessage({ command: 'runQuery', query: request, queryType: 'outline' });
+        }
+
+        function runDiagnosticsQuery() {
+            const path = document.getElementById('diagnostics-path').value;
+            
+            const request = { type: 'diagnostics' };
+            if (path) request.path = path;
+            
+            vscode.postMessage({ command: 'runQuery', query: request, queryType: 'diagnostics' });
+        }
+
+        // Clear functions
+        function clearSymbols() {
+            document.getElementById('symbols-query').value = '';
+            document.getElementById('symbols-path').value = '';
+            document.getElementById('symbols-exclude').value = '';
+            document.getElementById('symbols-countOnly').checked = false;
+            document.querySelectorAll('.kind-checkbox input').forEach(cb => cb.checked = false);
+            document.getElementById('symbols-result').classList.remove('visible');
+        }
+
+        function clearReferences() {
+            document.getElementById('references-path').value = '';
+            document.getElementById('references-line').value = '';
+            document.getElementById('references-column').value = '';
+            document.getElementById('references-result').classList.remove('visible');
+        }
+
+        function clearDefinition() {
+            document.getElementById('definition-path').value = '';
+            document.getElementById('definition-line').value = '';
+            document.getElementById('definition-column').value = '';
+            document.getElementById('definition-result').classList.remove('visible');
+        }
+
+        function clearHierarchy() {
+            document.getElementById('hierarchy-path').value = '';
+            document.getElementById('hierarchy-line').value = '';
+            document.getElementById('hierarchy-column').value = '';
+            document.getElementById('hierarchy-result').classList.remove('visible');
+        }
+
+        function clearOutline() {
+            document.getElementById('outline-path').value = '';
+            document.getElementById('outline-symbol').value = '';
+            document.getElementById('outline-kind').value = '';
+            document.getElementById('outline-result').classList.remove('visible');
+        }
+
+        function clearDiagnostics() {
+            document.getElementById('diagnostics-path').value = '';
+            document.getElementById('diagnostics-result').classList.remove('visible');
+        }
+
+        // Use active position/file
+        function useActivePosition(type) {
+            if (!activeFile.path) {
+                alert('No active file');
+                return;
+            }
+            
+            document.getElementById(\`\${type}-path\`).value = activeFile.path;
+            if (type !== 'outline' && type !== 'diagnostics') {
+                document.getElementById(\`\${type}-line\`).value = activeFile.line;
+                document.getElementById(\`\${type}-column\`).value = activeFile.column;
             }
         }
-        
-        function loadFromClipboard() {
-            navigator.clipboard.readText().then(text => {
-                try {
-                    const json = JSON.parse(text);
-                    document.getElementById('jsonEditor').value = JSON.stringify(json, null, 2);
-                    formatJSON();
-                } catch (e) {
-                    showResult('Invalid JSON in clipboard: ' + e.message, 'error');
-                }
-            }).catch(err => {
-                showResult('Failed to read clipboard: ' + err.message, 'error');
-            });
+
+        function useActiveFile(type) {
+            if (!activeFile.path) {
+                alert('No active file');
+                return;
+            }
+            
+            document.getElementById(\`\${type}-path\`).value = activeFile.path;
+            if (type === 'outline' && activeFile.symbol) {
+                document.getElementById('outline-symbol').value = activeFile.symbol;
+            }
         }
+
+        // Handle location clicks
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('location-link')) {
+                const path = e.target.dataset.path;
+                const line = parseInt(e.target.dataset.line);
+                const column = parseInt(e.target.dataset.column);
+                
+                // Auto-fill references/definition/hierarchy forms
+                ['references', 'definition', 'hierarchy'].forEach(type => {
+                    document.getElementById(\`\${type}-path\`).value = path;
+                    document.getElementById(\`\${type}-line\`).value = line;
+                    document.getElementById(\`\${type}-column\`).value = column;
+                });
+            }
+        });
+
+        // Request active file on load
+        vscode.postMessage({ command: 'getActiveFile' });
     </script>
 </body>
 </html>`;

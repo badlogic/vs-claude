@@ -135,7 +135,7 @@ QUERY TYPES:
    1. {"type": "symbols", "query": "processUser"}  // find it first
    2. {"type": "references", "path": "/src/user.ts", "line": 42}  // find usages
 
-3. definition - Jump from usage to definition
+3. definition - Get the location of the definition of the symbol, e.g. function in header -> implementation in .cpp file.
    Required: path, line
    Optional: column
 
@@ -148,13 +148,13 @@ QUERY TYPES:
 5. supertype - Find what a type extends/implements
    Required: path, line
    Optional: column
-   
+
    {"type": "supertype", "path": "/src/models/User.ts", "line": 5}
 
 6. subtype - Find implementations/subclasses
    Required: path, line
    Optional: column
-   
+
    {"type": "subtype", "path": "/src/base/Repository.ts", "line": 1}
 
 RESPONSE: Always returns array of [{result: ...}] or [{error: ...}]

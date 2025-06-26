@@ -33,22 +33,6 @@ export class LogViewerWebviewProvider {
 			});
 		});
 
-		// Handle messages from webview
-		this.panel.webview.onDidReceiveMessage(
-			async (message) => {
-				switch (message.command) {
-					case 'clear':
-						logger.clearLogs();
-						break;
-					case 'setLogLevel':
-						logger.setLogLevel(message.level);
-						break;
-				}
-			},
-			undefined,
-			this.context.subscriptions
-		);
-
 		this.panel.onDidDispose(
 			() => {
 				logListener.dispose();
@@ -67,301 +51,292 @@ export class LogViewerWebviewProvider {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VS Claude Logs</title>
     <style>
-        :root {
-            --vscode-editor-background: var(--vscode-editor-background);
-            --vscode-editor-foreground: var(--vscode-editor-foreground);
-            --vscode-button-background: var(--vscode-button-background);
-            --vscode-button-foreground: var(--vscode-button-foreground);
-            --vscode-button-hoverBackground: var(--vscode-button-hoverBackground);
-            --vscode-input-background: var(--vscode-input-background);
-            --vscode-input-foreground: var(--vscode-input-foreground);
-            --vscode-input-border: var(--vscode-input-border);
-            --vscode-dropdown-background: var(--vscode-dropdown-background);
-            --vscode-dropdown-foreground: var(--vscode-dropdown-foreground);
-            --vscode-dropdown-border: var(--vscode-dropdown-border);
+        * {
+            box-sizing: border-box;
         }
 
         body {
-            font-family: var(--vscode-font-family);
-            font-size: var(--vscode-font-size);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 13px;
             margin: 0;
             padding: 0;
             background: var(--vscode-editor-background);
             color: var(--vscode-editor-foreground);
-        }
-
-        .container {
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .toolbar {
-            display: flex;
-            gap: 10px;
-            padding: 10px;
-            background: var(--vscode-editor-background);
-            border-bottom: 1px solid var(--vscode-panel-border);
-            align-items: center;
-            flex-shrink: 0;
-        }
-
-        .log-container {
-            flex: 1;
-            overflow-y: auto;
-            padding: 10px;
-            font-family: var(--vscode-editor-font-family, 'Consolas', 'Monaco', 'Courier New', monospace);
-            font-size: 13px;
             line-height: 1.5;
         }
 
+        .container {
+            padding: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
         .log-entry {
-            margin-bottom: 2px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
+            margin-bottom: 20px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            font-size: 12px;
+            border-bottom: 1px solid var(--vscode-panel-border);
+            padding-bottom: 20px;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
         }
 
         .timestamp {
-            color: #666;
+            color: var(--vscode-descriptionForeground);
+            opacity: 0.7;
+            font-size: 11px;
         }
 
-        .level-debug {
-            color: #888;
+        .level {
+            font-weight: 600;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            text-transform: uppercase;
         }
 
-        .level-info {
-            color: #4B9BFF;
+        .level.debug {
+            background: rgba(150, 150, 150, 0.2);
+            color: #999;
         }
 
-        .level-warn {
-            color: #FFC936;
+        .level.info {
+            background: rgba(0, 122, 204, 0.2);
+            color: #007ACC;
         }
 
-        .level-error {
-            color: #F14C4C;
-            font-weight: bold;
+        .level.warn {
+            background: rgba(255, 165, 0, 0.2);
+            color: #FFA500;
+        }
+
+        .level.error {
+            background: rgba(215, 58, 73, 0.2);
+            color: #D73A49;
         }
 
         .component {
-            color: #16C3C3;
+            color: var(--vscode-symbolIcon-namespaceForeground, #4EC9B0);
+            font-weight: 500;
         }
 
         .message {
             color: var(--vscode-editor-foreground);
+            line-height: 1.6;
+            margin: 4px 0;
         }
 
-        .message.debug {
-            color: #888;
-        }
-
-        .message.error {
-            font-weight: bold;
-        }
-
-        .args {
-            color: #888;
-            margin-left: 20px;
-            font-size: 12px;
-        }
-
-        button {
-            background: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            border: none;
-            padding: 6px 14px;
-            cursor: pointer;
-            border-radius: 2px;
-            font-size: 13px;
-        }
-
-        button:hover {
-            background: var(--vscode-button-hoverBackground);
-        }
-
-        select {
-            background: var(--vscode-dropdown-background);
-            color: var(--vscode-dropdown-foreground);
-            border: 1px solid var(--vscode-dropdown-border);
-            padding: 4px 8px;
-            cursor: pointer;
-            border-radius: 2px;
-            font-size: 13px;
-        }
-
-        .filter-input {
-            background: var(--vscode-input-background);
-            color: var(--vscode-input-foreground);
-            border: 1px solid var(--vscode-input-border);
-            padding: 4px 8px;
-            border-radius: 2px;
-            font-size: 13px;
-            flex: 1;
-            max-width: 300px;
-        }
-
-        .stats {
-            margin-left: auto;
-            color: #888;
-            font-size: 12px;
-        }
-
+        /* Command styling */
         .command-arrow {
-            color: #16C3C3;
+            color: #4EC9B0;
+            font-weight: bold;
         }
 
         .command-name {
-            font-weight: bold;
+            color: #DCDCAA;
+            font-weight: 600;
         }
 
         .success-icon {
-            color: #4EC34E;
+            color: #4EC9B0;
         }
 
         .error-icon {
             color: #F14C4C;
         }
 
+        /* File paths */
         .file-path {
-            color: #FFC936;
+            color: #9CDCFE;
+            text-decoration: underline;
+            cursor: pointer;
         }
 
-        .query-type {
-            color: #C586C0;
+        .file-path:hover {
+            color: #B8DFFF;
         }
 
-        .no-logs {
+        /* JSON rendering */
+        .json-container {
+            background: var(--vscode-textBlockQuote-background, rgba(255, 255, 255, 0.05));
+            border: 1px solid var(--vscode-textBlockQuote-border, rgba(255, 255, 255, 0.1));
+            border-radius: 4px;
+            padding: 12px;
+            margin: 8px 0;
+            overflow-x: auto;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .json-key {
+            color: #9CDCFE;
+        }
+
+        .json-string {
+            color: #CE9178;
+        }
+
+        .json-number {
+            color: #B5CEA8;
+        }
+
+        .json-boolean {
+            color: #569CD6;
+        }
+
+        .json-null {
+            color: #569CD6;
+            opacity: 0.7;
+        }
+
+        .json-punctuation {
+            color: var(--vscode-editor-foreground);
+            opacity: 0.6;
+        }
+
+        /* Tool-specific styling */
+        .tool-section {
+            margin: 8px 0;
+        }
+
+        .tool-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--vscode-descriptionForeground);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .empty-state {
             text-align: center;
-            color: #888;
-            margin-top: 50px;
+            padding: 80px 20px;
+            color: var(--vscode-descriptionForeground);
+            font-style: italic;
         }
 
-        .log-entry.filtered-out {
-            display: none;
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--vscode-scrollbarSlider-background);
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--vscode-scrollbarSlider-hoverBackground);
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="toolbar">
-            <button onclick="clearLogs()">Clear</button>
-            <select id="logLevel" onchange="changeLogLevel()">
-                <option value="0">Debug</option>
-                <option value="1" selected>Info</option>
-                <option value="2">Warn</option>
-                <option value="3">Error</option>
-            </select>
-            <input type="text" class="filter-input" id="filterInput" placeholder="Filter logs..." oninput="filterLogs()">
-            <div class="stats" id="stats">0 logs</div>
-        </div>
-        <div class="log-container" id="logContainer">
-            <div class="no-logs">No logs yet...</div>
-        </div>
+    <div class="container" id="logContainer">
+        <div class="empty-state">Waiting for logs...</div>
     </div>
 
     <script>
         const vscode = acquireVsCodeApi();
         let logs = [];
-        let filter = '';
 
         function formatTimestamp(timestamp) {
-            return \`<span class="timestamp">\${timestamp}</span>\`;
-        }
-
-        function formatLevel(level, levelName) {
-            const levelClass = \`level-\${levelName.toLowerCase().trim()}\`;
-            return \`<span class="\${levelClass}">\${levelName}</span>\`;
-        }
-
-        function formatComponent(component) {
-            return \`<span class="component">[\${component}]</span>\`;
+            // Extract just the time portion
+            const match = timestamp.match(/\\d{2}:\\d{2}:\\d{2}\\.\\d{3}/);
+            return match ? match[0] : timestamp;
         }
 
         function formatMessage(message, level) {
-            // Handle special formatting
-            message = message
-                .replace(/→\\s*(\\w+)/g, '<span class="command-arrow">→</span> <span class="command-name">$1</span>')
-                .replace(/✓\\s*(\\w+)/g, '<span class="success-icon">✓</span> $1')
-                .replace(/✗\\s*(\\w+)/g, '<span class="error-icon">✗</span> $1')
-                .replace(/\\/([^/:]+\\.[^/:]+)(:\\d+)?(:\\d+)?/g, '<span class="file-path">$&</span>');
-
-            const messageClass = level === 0 ? 'debug' : level === 3 ? 'error' : '';
-            return \`<span class="message \${messageClass}">\${message}</span>\`;
+            // Handle special message patterns
+            return message
+                .replace(/→\\s*([\\w-]+)/g, '<span class="command-arrow">→</span> <span class="command-name">$1</span>')
+                .replace(/✓\\s*([\\w-]+)/g, '<span class="success-icon">✓</span> $1')
+                .replace(/✗\\s*([\\w-]+)/g, '<span class="error-icon">✗</span> $1')
+                .replace(/(\\/[^\\s]+)/g, '<span class="file-path">$1</span>');
         }
 
-        function formatArgs(args) {
-            if (!args || args.length === 0) return '';
-            
-            const formatted = args.map(arg => {
-                if (typeof arg === 'object') {
-                    return JSON.stringify(arg, null, 2);
-                }
-                return String(arg);
-            }).join(' ');
-
-            return \`<div class="args">\${formatted}</div>\`;
+        function formatJson(obj) {
+            return JSON.stringify(obj, null, 2)
+                .replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
+                .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
+                .replace(/: (\\d+)/g, ': <span class="json-number">$1</span>')
+                .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
+                .replace(/: null/g, ': <span class="json-null">null</span>')
+                .replace(/([{}\\[\\],])/g, '<span class="json-punctuation">$1</span>');
         }
 
         function createLogEntry(log) {
-            const div = document.createElement('div');
-            div.className = 'log-entry';
-            div.innerHTML = \`
-                \${formatTimestamp(log.timestamp)}
-                \${formatLevel(log.level, log.levelStr)}
-                \${formatComponent(log.component)}
-                \${formatMessage(log.message, log.level)}
-                \${formatArgs(log.args)}
+            const levelClass = log.levelStr.toLowerCase().trim();
+            const hasArgs = log.args && log.args.length > 0;
+            
+            let argsHtml = '';
+            if (hasArgs) {
+                // Check if this is a tool command with args
+                const isCommand = log.component === 'Command' || log.component === 'CommandHandler';
+                const isQuery = log.component === 'QueryHandler';
+                
+                if (isCommand || isQuery) {
+                    log.args.forEach(arg => {
+                        if (typeof arg === 'object' && arg !== null) {
+                            const label = isCommand ? 'Arguments' : 'Data';
+                            argsHtml += \`
+                                <div class="tool-section">
+                                    <div class="tool-label">\${label}:</div>
+                                    <div class="json-container">\${formatJson(arg)}</div>
+                                </div>
+                            \`;
+                        }
+                    });
+                } else {
+                    // Regular args display
+                    log.args.forEach(arg => {
+                        if (typeof arg === 'object' && arg !== null) {
+                            argsHtml += \`<div class="json-container">\${formatJson(arg)}</div>\`;
+                        } else {
+                            argsHtml += \`<div style="margin: 4px 0; opacity: 0.8;">\${String(arg)}</div>\`;
+                        }
+                    });
+                }
+            }
+
+            return \`
+                <div class="log-entry">
+                    <div class="log-header">
+                        <span class="timestamp">\${formatTimestamp(log.timestamp)}</span>
+                        <span class="level \${levelClass}">\${log.levelStr}</span>
+                        <span class="component">\${log.component}</span>
+                    </div>
+                    <div class="message">\${formatMessage(log.message, log.level)}</div>
+                    \${argsHtml}
+                </div>
             \`;
-            return div;
         }
 
         function renderLogs() {
             const container = document.getElementById('logContainer');
-            const filtered = logs.filter(log => {
-                if (!filter) return true;
-                const searchText = \`\${log.component} \${log.message} \${JSON.stringify(log.args || [])}\`.toLowerCase();
-                return searchText.includes(filter.toLowerCase());
-            });
-
-            if (filtered.length === 0) {
-                container.innerHTML = '<div class="no-logs">No logs match the filter...</div>';
-            } else {
-                container.innerHTML = '';
-                filtered.forEach(log => {
-                    container.appendChild(createLogEntry(log));
-                });
+            
+            if (logs.length === 0) {
+                container.innerHTML = '<div class="empty-state">Waiting for logs...</div>';
+                return;
             }
 
-            updateStats();
+            container.innerHTML = logs.map(log => createLogEntry(log)).join('');
             
             // Auto-scroll to bottom
-            container.scrollTop = container.scrollHeight;
-        }
-
-        function updateStats() {
-            const filtered = logs.filter(log => {
-                if (!filter) return true;
-                const searchText = \`\${log.component} \${log.message} \${JSON.stringify(log.args || [])}\`.toLowerCase();
-                return searchText.includes(filter.toLowerCase());
-            });
-            
-            document.getElementById('stats').textContent = 
-                filter ? \`\${filtered.length}/\${logs.length} logs\` : \`\${logs.length} logs\`;
-        }
-
-        function clearLogs() {
-            logs = [];
-            renderLogs();
-            vscode.postMessage({ command: 'clear' });
-        }
-
-        function changeLogLevel() {
-            const level = parseInt(document.getElementById('logLevel').value);
-            vscode.postMessage({ command: 'setLogLevel', level });
-        }
-
-        function filterLogs() {
-            filter = document.getElementById('filterInput').value;
-            renderLogs();
+            window.scrollTo(0, document.body.scrollHeight);
         }
 
         window.addEventListener('message', event => {
@@ -373,8 +348,23 @@ export class LogViewerWebviewProvider {
                     break;
                 case 'addLog':
                     logs.push(message.log);
+                    // Only keep last 500 logs for performance
+                    if (logs.length > 500) {
+                        logs = logs.slice(-500);
+                    }
                     renderLogs();
                     break;
+            }
+        });
+
+        // Handle file path clicks
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('file-path')) {
+                const path = e.target.textContent;
+                vscode.postMessage({
+                    command: 'openFile',
+                    path: path
+                });
             }
         });
     </script>

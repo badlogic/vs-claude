@@ -42,21 +42,21 @@ interface ReferencesRequest {
 	type: 'references';
 	path: string; // Required: file containing the symbol
 	line: number; // Required: line number of the symbol (1-based)
-	column?: number; // Optional: column position in the line (1-based)
+	column: number; // Required: column position in the line (1-based)
 }
 
 interface DefinitionRequest {
 	type: 'definition';
 	path: string; // Required: file containing the symbol
 	line: number; // Required: line number of the symbol (1-based)
-	column?: number; // Optional: column position in the line (1-based)
+	column: number; // Required: column position in the line (1-based)
 }
 
 interface TypeHierarchyRequest {
 	type: 'supertype' | 'subtype';
 	path: string; // Required: file containing the type
 	line: number; // Required: line number of the type (1-based)
-	column?: number; // Optional: column position in the line (1-based)
+	column: number; // Required: column position in the line (1-based)
 }
 
 export type QueryRequest =
@@ -409,7 +409,7 @@ export class QueryHandler {
 			const uri = vscode.Uri.file(request.path);
 			const position = new vscode.Position(
 				request.line - 1, // Convert to 0-based
-				request.column ? request.column - 1 : 0
+				request.column - 1
 			);
 
 			// Find references at this position
@@ -600,7 +600,7 @@ export class QueryHandler {
 			const uri = vscode.Uri.file(request.path);
 			const position = new vscode.Position(
 				request.line - 1, // Convert to 0-based
-				request.column ? request.column - 1 : 0
+				request.column - 1
 			);
 
 			// Find definition at this position
@@ -757,7 +757,7 @@ export class QueryHandler {
 			const uri = vscode.Uri.file(request.path);
 			const position = new vscode.Position(
 				request.line - 1, // Convert to 0-based
-				request.column ? request.column - 1 : 0
+				request.column - 1
 			);
 
 			// Position already logged by the query
