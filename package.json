@@ -16,10 +16,6 @@
     "Other"
   ],
   "main": "./out/extension.js",
-  "files": [
-    "out/**/*.js",
-    "bin/**/*"
-  ],
   "activationEvents": [
     "onStartupFinished"
   ],

@@ -176,8 +176,8 @@ export class E2ETestSetup {
 		assert.ok(extension, 'Extension not found');
 		await extension.activate();
 
-		// Give VS Code time to create window metadata
-		await new Promise((resolve) => setTimeout(resolve, 1000));
+		// Give VS Code more time to create window metadata
+		await new Promise((resolve) => setTimeout(resolve, 3000));
 
 		// Start the MCP server
 		const platform = os.platform();

@@ -20,8 +20,16 @@ async function installExtensions(vscodeExecutablePath: string) {
     ];
 
     // Check if extensions marker file exists
-    const vscodePath = vscodeExecutablePath.split('/Visual Studio Code.app')[0];
-    const markerFile = path.join(vscodePath, '.extensions-installed');
+    // Determine the installation directory based on the executable path
+    let installDir: string;
+    if (process.platform === 'darwin') {
+        // On macOS, extract the .vscode-test directory path
+        installDir = vscodeExecutablePath.split('/Visual Studio Code.app')[0];
+    } else {
+        // On Linux/Windows, go up from bin/code to the VS Code directory
+        installDir = path.dirname(path.dirname(vscodeExecutablePath));
+    }
+    const markerFile = path.join(installDir, '.extensions-installed');
     console.log('Marker file path:', markerFile);
     if (fs.existsSync(markerFile)) {
         console.log('Language extensions already installed, skipping...');
