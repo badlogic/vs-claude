@@ -92,134 +92,74 @@ Notes:
 	// Register query tool
 	mcpServer.AddTool(
 		mcp.NewTool("query",
-			mcp.WithDescription(`Query VS Code's language intelligence features for code understanding.
+			mcp.WithDescription(`Query VS Code's language intelligence for semantic code understanding.
 
-IMPORTANT: This is the PREFERRED tool for code navigation and analysis. Use this instead of grep/ripgrep when you need to:
-- Find where classes, methods, functions, variables are defined
-- Navigate to specific symbols or types
-- Understand code structure and hierarchy
-- Get type information and relationships
-- Find all usages/references of a symbol
-- Analyze code organization
+PREFER THIS over grep/ripgrep for finding symbols, understanding code structure, or navigating code.
+Uses Language Server Protocol (LSP) for accurate, language-aware results across all file types.
 
-This tool leverages VS Code's Language Server Protocol (LSP) for accurate, semantic code understanding across all supported languages.
+Supports single query or batch queries (executed in parallel):
+Single: {"type": "findSymbols", "query": "UserService"}
+Batch: [{"type": "findSymbols", "query": "get*"}, {"type": "outline", "path": "/path/to/file.ts"}]
 
-You can send a single query or multiple queries in one call:
+RESPONSE FORMAT: Always returns array, even for single query.
+Success: [{"result": [...]}] or [{"result": []}] for no matches
+Error: [{"error": "error message"}]
 
-Single query:
-{"type": "findSymbols", "query": "handle*"}
+QUERY TYPES:
 
-Multiple queries (executed in parallel):
-[
-  {"type": "findSymbols", "query": "handle*"},
-  {"type": "outline", "path": "/path/to/file.ts"},
-  {"type": "diagnostics"}
-]
-
-Batch query response format:
-[
-  [array of results],          // Successful query returns array directly
-  [],                          // Empty array for no results
-  {"error": "error message"}   // Failed query returns error object
-]
-
-Query types (with required parameters marked):
-
-1. Find Symbols - Search for symbols across the entire workspace
-   USE THIS to find where symbols are defined in the codebase!
+1. findSymbols - Search symbols across entire workspace
+   Required: query (string) - Symbol name with glob patterns (*, ?, [abc], {a,b})
+   Optional: path (string) - Filter to specific file
+   Optional: kind (string) - Symbol types: class, method, function, interface, property, field, variable, constant, enum, namespace, module, struct, type
    
-   Parameters: query (required), path?, kind?
-   - query: Symbol name with glob patterns (*, ?, [abc], {a,b}, **)
-   - kind: Filter by symbol type (e.g., "class", "method", "interface")
-   - path: Limit results to a specific file
-   
-   {"type": "findSymbols", "query": "Animation"}  // find symbols named exactly "Animation"
-   {"type": "findSymbols", "query": "*", "kind": "class"}  // find ALL classes in workspace
-   {"type": "findSymbols", "query": "get*", "kind": "method"}  // methods starting with "get"
-   {"type": "findSymbols", "query": "*Test", "kind": "class"}  // classes ending with "Test"
-   {"type": "findSymbols", "query": "[A-Z]*Service"}  // services starting with uppercase
+   {"type": "findSymbols", "query": "UserService"}  // exact match
+   {"type": "findSymbols", "query": "get*", "kind": "method"}  // all getter methods
+   {"type": "findSymbols", "query": "*Test", "kind": "class"}  // test classes  
    {"type": "findSymbols", "query": "{get,set}*"}  // getters and setters
-   {"type": "findSymbols", "query": "process?", "path": "/path/to/file.ts"}  // process + 1 char
-   {"type": "findSymbols", "query": "Animation*"}  // Animation, AnimationController, etc.
+   {"type": "findSymbols", "query": "[A-Z]*Service"}  // services with uppercase start
 
-2. Get File Outline - Understand file/class structure, see methods/fields/properties
-   USE THIS to explore a file's API and structure!
-   
-   Parameters: path (required), symbol?, kind?, depth?
-   - symbol: Filter with glob patterns + dot notation (e.g., "Class.get*")
-   - kind: Filter by symbol type (comma-separated list)
-   - depth: Limit depth of results (1 = only top-level symbols)
+2. outline - Get file structure with hierarchy  
+   Required: path (string) - Absolute file path
+   Optional: symbol (string) - Filter with patterns, supports dot notation for scoping
+   Optional: kind (string) - Comma-separated symbol types
+   Optional: depth (number) - Limit tree depth (1 = top-level only)
    
    {"type": "outline", "path": "/path/to/file.ts"}  // full file structure
-   {"type": "outline", "path": "/path/to/file.ts", "depth": 1}  // only top-level classes/functions
-   {"type": "outline", "path": "/path/to/Animation.java", "symbol": "Animation"}  // show Animation class only
-   {"type": "outline", "path": "/path/to/Animation.java", "symbol": "Animation.*"}  // show members of Animation (play, stop, etc.)
-   {"type": "outline", "path": "/path/to/Animation.java", "symbol": "Animation.get*"}  // show getters in Animation (getSpeed, etc.)
-   {"type": "outline", "path": "/path/to/Animation.java", "symbol": "Animation.*", "kind": "method"}  // only methods of Animation
-   {"type": "outline", "path": "/path/to/file.ts", "symbol": "get*"}  // all getters in entire file
-   {"type": "outline", "path": "/path/to/file.ts", "symbol": "*Test"}  // all test classes/methods
-   {"type": "outline", "path": "/path/to/file.dart", "kind": "class,interface", "depth": 1}  // all types without members
+   {"type": "outline", "path": "/path/to/file.ts", "depth": 1}  // top-level only
+   {"type": "outline", "path": "/path/to/file.java", "symbol": "Animation.*"}  // Animation's members
+   {"type": "outline", "path": "/path/to/file.java", "symbol": "Animation.get*"}  // Animation's getters
+   {"type": "outline", "path": "/path/to/file.ts", "kind": "class,interface"}  // only types
 
-3. Get Diagnostics - Get compilation errors, warnings, and issues
+3. diagnostics - Get errors, warnings, and issues
+   Optional: path (string) - Specific file or omit for entire workspace
    
-   Parameters: path?
+   {"type": "diagnostics"}  // all workspace diagnostics
+   {"type": "diagnostics", "path": "/path/to/file.ts"}  // single file diagnostics
+
+4. references - Find all usages of symbol at specific location
+   Required: path (string) - File containing the symbol  
+   Required: line (number) - Line number, 1-based
+   Optional: character (number) - Column position, 1-based
    
-   {"type": "diagnostics"}  // all workspace errors/warnings
-   {"type": "diagnostics", "path": "/path/to/file.ts"}  // errors in specific file
+   {"type": "references", "path": "/path/to/file.ts", "line": 42}  // find usages
+   {"type": "references", "path": "/path/to/file.ts", "line": 42, "character": 15}  // precise
 
-4. Find References - Find all usages of the symbol at a specific location
-   USE THIS to understand code impact and dependencies!
-   
-   Parameters: path (required), line (required), character?
-   - path: File containing the symbol
-   - line: Line number where the symbol is located (1-based)
-   - character: Optional column position on the line
-   
-   {"type": "references", "path": "/path/to/file.ts", "line": 42}  // find all usages of symbol on line 42
-   {"type": "references", "path": "/path/to/file.ts", "line": 42, "character": 15}  // more precise position
+RETURN TYPES:
+- findSymbols: Array of {name, kind, path (with line:col-line:col range), containedIn?, detail?}
+- outline: Array of {name, kind, location (line:col-line:col), detail?, children?} - hierarchical
+- diagnostics: Array of {path (with line:col), severity, message, source?}
+- references: Array of {path (with line:col), preview}
 
-Returns JSON data with symbol locations including line numbers.
+USAGE PATTERNS:
+- Find getters in class: First findSymbols "ClassName", then outline with symbol:"ClassName.get*"  
+- Explore large files: Use outline with depth:1, then drill down with symbol filters
+- C++ headers/implementations: findSymbols shows both .h and .cpp locations
 
-Example responses (TypeScript types available in extension):
-
-findSymbols returns Symbol[]:
-[{"name": "getUser", "kind": "Method", "path": "/path/file.ts:50:1-55:20", "containedIn": "UserService", 
-  "detail": "getUser(id: string): Promise<User>"}]
-
-outline returns OutlineResult[]:
-[{"name": "Animation", "detail": "export class", "kind": "Class", "location": "10:1-50:2", 
-  "children": [{"name": "play", "kind": "Method", "location": "15:3-20:4"}]}]
-
-diagnostics returns DiagnosticsResult[]:
-[{"path": "/path/file.ts:10:5", "severity": "error", "message": "Cannot find name 'foo'", "source": "ts"}]
-
-references returns ReferencesResult[]:
-[{"path": "/path/file.ts:25:10", "preview": "const x = processUser(data);"}]
-
-When to use this tool vs others:
-✓ Use query tool FIRST for: Finding definitions, understanding code structure, navigating to symbols
-✗ Don't use grep/ripgrep for: Finding classes, methods, or understanding code - use query instead
-✗ Don't read entire files for: Getting a file's methods/classes - use outline instead
-
-For complex navigation tasks, chain simple queries:
-- To find all getters in a class: First findSymbols for the class, then outline with symbol="get*"
-- To find implementations: findSymbols will show both declarations (.h) and definitions (.cpp)
-- To explore a type hierarchy: Use findSymbols for the base class, then outline on each result
-
-If this tool doesn't return expected results:
-- Language server might not support the file type (e.g., some config files, scripts)
-- The file or symbol might not yet be indexed or not be part of the VS Code workspace
-- For C++ implementations: findSymbols shows both .h declarations and .cpp definitions
-- Fall back to grep/ripgrep for text searches or Read tool for detailed inspection
-
-Notes:
-- Multiple queries run in parallel for performance
-- Glob patterns: * (any chars), ? (one char), [abc], {a,b}, ** (any depth)
-- Available symbol kinds: class, method, property, field, constructor, function, variable,
-  constant, enum, interface, namespace, package, module, struct, type (=class+interface+struct+enum)
-- Batch queries: all execute even if some fail, each has its own success/error status
-- Language support varies by installed VS Code extensions
-- All paths must be absolute`),
+LIMITATIONS:
+- Requires language server support (varies by file type and installed extensions)
+- Files must be in VS Code workspace to be indexed
+- All paths must be absolute
+- Glob patterns: * (any chars), ? (one char), [abc] (char set), {a,b} (alternatives)`),
 			mcp.WithObject("args",
 				mcp.Description("Single query object or array of query objects"),
 			),
