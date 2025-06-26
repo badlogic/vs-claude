@@ -153,9 +153,9 @@ Query types (with required parameters marked):
    
    {"type": "outline", "path": "/path/to/file.ts"}  // full file structure
    {"type": "outline", "path": "/path/to/file.ts", "depth": 1}  // only top-level classes/functions
-   {"type": "outline", "path": "/path/to/Animation.java", "symbol": "Animation"}  // show Animation class with all members
-   {"type": "outline", "path": "/path/to/Animation.java", "symbol": "Animation.*"}  // only members of Animation (no class itself)
-   {"type": "outline", "path": "/path/to/Animation.java", "symbol": "Animation.get*"}  // only getters in Animation class
+   {"type": "outline", "path": "/path/to/Animation.java", "symbol": "Animation"}  // show Animation class only
+   {"type": "outline", "path": "/path/to/Animation.java", "symbol": "Animation.*"}  // show members of Animation (play, stop, etc.)
+   {"type": "outline", "path": "/path/to/Animation.java", "symbol": "Animation.get*"}  // show getters in Animation (getSpeed, etc.)
    {"type": "outline", "path": "/path/to/Animation.java", "symbol": "Animation.*", "kind": "method"}  // only methods of Animation
    {"type": "outline", "path": "/path/to/file.ts", "symbol": "get*"}  // all getters in entire file
    {"type": "outline", "path": "/path/to/file.ts", "symbol": "*Test"}  // all test classes/methods

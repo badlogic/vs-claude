@@ -171,29 +171,12 @@ export class QueryHandler {
 			// Apply filtering if requested
 			let symbolData: OutlineSymbol[];
 
-			// Check if symbol uses dot notation for hierarchical filtering
-			let symbolsToProcess = documentSymbols;
-			let symbolPattern = request.symbol;
-
-			if (request.symbol?.includes('.')) {
-				// Split into parent.pattern (e.g., "Animation.get*")
-				const parts = request.symbol.split('.');
-				const parentName = parts[0];
-				symbolPattern = parts.slice(1).join('.'); // Handle cases like "Namespace.Class.method*"
-
-				const parentSymbol = this.findSymbolByName(documentSymbols, parentName);
-				if (!parentSymbol) {
-					return { error: `Parent symbol '${parentName}' not found in file` };
-				}
-				// Use only the children of the parent symbol
-				symbolsToProcess = parentSymbol.children || [];
-			}
-
-			if (symbolPattern || request.kind) {
+			if (request.symbol || request.kind) {
 				// Use filterOutlineSymbols which handles both name and kind filtering
+				// This now properly handles hierarchical paths like "Animation.get*"
 				symbolData = this.filterOutlineSymbols(
-					symbolsToProcess,
-					symbolPattern || '*', // If no symbol specified, match all
+					documentSymbols,
+					request.symbol || '*', // If no symbol specified, match all
 					false, // Always use pattern matching for outline
 					request.kind
 				);
@@ -206,7 +189,7 @@ export class QueryHandler {
 				}
 			} else {
 				// No filtering - return all symbols
-				symbolData = symbolsToProcess.map((s) => this.convertDocumentSymbol(s));
+				symbolData = documentSymbols.map((s) => this.convertDocumentSymbol(s));
 			}
 
 			// Apply depth limiting if specified
@@ -373,13 +356,17 @@ export class QueryHandler {
 		symbols: vscode.DocumentSymbol[],
 		query: string,
 		exact?: boolean,
-		kindFilter?: string
+		kindFilter?: string,
+		parentPath: string = ''
 	): OutlineSymbol[] {
 		const result: OutlineSymbol[] = [];
 
 		for (const symbol of symbols) {
-			// Check if this symbol matches our criteria
-			const symbolMatches = this.nameAndKindMatches(symbol.name, symbol.kind, query, exact, kindFilter);
+			// Build the full hierarchical path for this symbol
+			const fullPath = parentPath ? `${parentPath}.${symbol.name}` : symbol.name;
+
+			// Check if this symbol matches our criteria using the full path
+			const symbolMatches = this.nameAndKindMatches(fullPath, symbol.kind, query, exact, kindFilter);
 
 			if (symbolMatches) {
 				// Symbol matches: include it with ALL its children (unfiltered)
@@ -387,7 +374,8 @@ export class QueryHandler {
 				result.push(outline);
 			} else if (symbol.children && symbol.children.length > 0) {
 				// Symbol doesn't match: check if any descendants match
-				const filteredChildren = this.filterOutlineSymbols(symbol.children, query, exact, kindFilter);
+				// Pass the current full path as parent path for children
+				const filteredChildren = this.filterOutlineSymbols(symbol.children, query, exact, kindFilter, fullPath);
 
 				if (filteredChildren.length > 0) {
 					// Has matching descendants: include this symbol as context with only the filtered children
@@ -427,23 +415,6 @@ export class QueryHandler {
 			message: diag.message,
 			source: diag.source,
 		}));
-	}
-
-	private findSymbolByName(symbols: vscode.DocumentSymbol[], name: string): vscode.DocumentSymbol | undefined {
-		// First check top-level symbols
-		for (const symbol of symbols) {
-			if (symbol.name === name) {
-				return symbol;
-			}
-			// Recursively check children
-			if (symbol.children && symbol.children.length > 0) {
-				const found = this.findSymbolByName(symbol.children, name);
-				if (found) {
-					return found;
-				}
-			}
-		}
-		return undefined;
 	}
 
 	private limitDepth(symbols: OutlineSymbol[], maxDepth: number, currentDepth: number = 1): OutlineSymbol[] {
