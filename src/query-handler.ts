@@ -173,7 +173,8 @@ export class QueryHandler {
 			const query = request.query || '*';
 
 			// Check for overly broad queries
-			const isBroadQuery = query === '*' || query === '**' || query === '*.*';
+			// Only * and ** are considered too broad - *.* naturally limits to 2 levels
+			const isBroadQuery = query === '*' || query === '**';
 			const hasNoKindFilter = !request.kinds || request.kinds.length === 0;
 			const isWorkspaceScope = !request.path;
 
@@ -200,20 +201,6 @@ export class QueryHandler {
 							request.includeDetails
 						);
 					} else {
-						// Folder scope - require depth or countOnly to prevent excessive results
-						if (!request.depth && !request.countOnly) {
-							return {
-								error: "Folder queries require either 'depth' or 'countOnly' to prevent excessive results. Use depth:1 for overview or countOnly:true to check size first.",
-							};
-						}
-
-						// Check for overly broad folder queries too
-						if (isBroadQuery && hasNoKindFilter && !request.countOnly) {
-							return {
-								error: "Query too broad: searching for '*' without any filters in folder scope would return too many results. Please add 'kinds' filter, use a more specific query pattern, or use 'countOnly' to check the size first.",
-							};
-						}
-
 						// Folder scope - search within folder
 						result = await this.symbolsInFolder(
 							request.path,
@@ -229,12 +216,7 @@ export class QueryHandler {
 					return { error: `Path not found or not accessible: ${request.path}` };
 				}
 			} else {
-				// Workspace scope - require depth or countOnly to prevent excessive results
-				if (!request.depth && !request.countOnly) {
-					return {
-						error: "Workspace queries require either 'depth' or 'countOnly' to prevent excessive results. Use depth:1 for overview or countOnly:true to check size first.",
-					};
-				}
+				// Workspace scope
 				result = await this.symbolsInWorkspace(
 					query,
 					request.kinds,

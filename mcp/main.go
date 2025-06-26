@@ -97,15 +97,15 @@ Notes:
 PREFER THIS over grep/ripgrep for finding symbols, understanding code structure, or navigating code.
 Uses Language Server Protocol (LSP) for accurate, language-aware results across all file types.
 
-⚠️ IMPORTANT: Workspace and folder queries REQUIRE either 'depth' or 'countOnly' parameter:
-- For overview: Use depth:1 (e.g., {"type": "symbols", "kinds": ["class"], "depth": 1})
-- To check size first: Use countOnly:true
-- Without these, workspace/folder queries will be rejected to prevent excessive results
-- File queries don't have this requirement
+⚠️ IMPORTANT: Use hierarchical queries to control result depth:
+- "*" returns only top-level symbols
+- "*.*" returns top-level + their direct children  
+- "Animation.*" returns Animation class + its direct members
+- Query depth naturally limits results - no separate depth parameter needed
 
 Supports single query or batch queries (executed in parallel):
-Single: {"type": "symbols", "query": "UserService", "kinds": ["class"], "depth": 1}
-Batch: [{"type": "symbols", "query": "get*", "kinds": ["method"], "depth": 1}, {"type": "symbols", "path": "/path/to/file.ts"}]
+Single: {"type": "symbols", "query": "UserService.*", "kinds": ["method"]}
+Batch: [{"type": "symbols", "query": "*.get*", "kinds": ["method"]}, {"type": "symbols", "path": "/path/to/file.ts"}]
 
 RESPONSE FORMAT: Always returns array, even for single query.
 Success: [{"result": [...]}] or [{"result": []}] for no matches
@@ -114,41 +114,47 @@ Error: [{"error": "error message"}]
 QUERY TYPES:
 
 1. symbols - Unified symbol search with hierarchical results
-   Optional: query (string) - Pattern to match (default: "*")
+   Optional: query (string) - Hierarchical pattern to match (default: "*")
    Optional: path (string) - File or folder path (default: workspace)
-   RECOMMENDED: kinds (array) - Symbol types to filter results
-   REQUIRED for workspace/folder: depth (number) OR countOnly (boolean) - Prevent excessive results
+   Optional: kinds (array) - Symbol types to filter results
    Optional: exclude (array) - Glob patterns to exclude files/folders
    Optional: includeDetails (boolean) - Include type signatures (when available)
+   Optional: countOnly (boolean) - Return only count of results
+   Optional: depth (number) - Legacy depth limiter (prefer hierarchical queries)
    
-   Depth parameter behavior:
-   - depth: 1 = Symbol + immediate children only
-   - depth: 2 = Symbol + children + grandchildren
-   - No depth = Full hierarchy (only allowed for file queries)
+   HIERARCHICAL QUERIES control depth naturally:
+   - "*" = top-level only
+   - "*.*" = top-level + direct children
+   - "*.*.*" = three levels deep
+   - "Animation" = just the Animation symbol
+   - "Animation.*" = Animation + its direct members
+   - "Animation.get*" = Animation + members starting with "get"
+   - "*.toString" = all toString methods in any class
+   - "spine.Animation.*" = namespace → class → members
 
    Symbol kinds: module, namespace, package, class, method, property, field,
                 constructor, enum, interface, function, variable, constant,
                 string, null, enummember, struct, operator, type
 
-   WORKSPACE QUERIES (must have depth or countOnly):
-   {"type": "symbols", "query": "*Test", "kinds": ["class"], "depth": 1}  // overview of test classes
-   {"type": "symbols", "query": "*Service", "kinds": ["class", "interface"], "depth": 1}  // service types
-   {"type": "symbols", "kinds": ["class"], "depth": 1}  // all top-level classes
-   {"type": "symbols", "kinds": ["class"], "exclude": ["**/node_modules/**", "**/*.test.ts"], "depth": 1}  // exclude patterns
-   {"type": "symbols", "query": "process*", "countOnly": true}  // check result count first
-
-   FOLDER QUERIES (must have depth or countOnly):
-   {"type": "symbols", "path": "/path/to/src", "query": "*Service", "depth": 1}  // services in folder
-   {"type": "symbols", "path": "/path/to/src", "kinds": ["class"], "countOnly": true}  // count classes in folder
+   EXAMPLES:
+   {"type": "symbols", "query": "*", "kinds": ["class"]}  // all top-level classes
+   {"type": "symbols", "query": "*.*", "kinds": ["method"]}  // all methods in all classes
+   {"type": "symbols", "query": "*Test"}  // all symbols ending with "Test"
+   {"type": "symbols", "query": "*Service", "kinds": ["class", "interface"]}  // service types
+   {"type": "symbols", "query": "process*", "countOnly": true}  // count matches first
+   {"type": "symbols", "kinds": ["class"], "exclude": ["**/test/**", "**/*.spec.ts"]}  // exclude patterns
    
-   FILE QUERIES (depth/countOnly optional):
+   {"type": "symbols", "path": "/path/to/src", "query": "*"}  // top-level in folder
+   {"type": "symbols", "path": "/path/to/src", "query": "*.*"}  // two levels in folder
    {"type": "symbols", "path": "/path/to/file.ts"}  // complete file structure
-   {"type": "symbols", "path": "/path/to/file.ts", "includeDetails": true}  // with type info
-
-   HIERARCHICAL QUERIES (for drilling down):
-   {"type": "symbols", "query": "Animation.*"}  // all members of Animation class
-   {"type": "symbols", "query": "Animation.get*"}  // getters in Animation class
-   {"type": "symbols", "query": "*.toString"}  // toString in all classes
+   {"type": "symbols", "path": "/path/to/file.ts", "query": "*.get*"}  // getters in file
+   
+   {"type": "symbols", "query": "Animation"}  // find Animation class/interface
+   {"type": "symbols", "query": "Animation.*"}  // Animation + direct members
+   {"type": "symbols", "query": "Animation.get*"}  // Animation + getter methods
+   {"type": "symbols", "query": "spine.Animation.*"}  // namespace → class → members
+   {"type": "symbols", "query": "*.*.toString"}  // toString in nested classes
+   {"type": "symbols", "query": "*.*.*", "kinds": ["type"]}  // types nested 3 levels deep
 
 2. diagnostics - Get errors, warnings, and issues
    Optional: path (string) - Specific file or omit for entire workspace
@@ -208,19 +214,19 @@ QUERY TYPES:
    {"type": "subtype", "path": "/src/models/BaseModel.ts", "line": 1}
 
 BEST PRACTICES:
-1. WORKSPACE SEARCHES: Must use depth OR countOnly (queries without these are rejected)
-2. DRILL DOWN: Use hierarchical queries (Class.*) for specific classes
-3. BE SPECIFIC: Combine query + kinds to narrow results
-4. ERROR EXAMPLES:
-   {"type": "symbols", "kinds": ["class"]}  // ❌ ERROR: Missing depth/countOnly
-   {"type": "symbols", "kinds": ["class"], "depth": 1}  // ✅ Good
-   {"type": "symbols", "query": "*Test", "countOnly": true}  // ✅ Good
+1. USE HIERARCHICAL QUERIES: Control depth with query syntax (*, *.*, etc.)
+2. BE SPECIFIC: Combine query + kinds to narrow results  
+3. CHECK COUNT FIRST: Use countOnly for potentially large result sets
+4. PATTERN EXAMPLES:
+   {"type": "symbols", "query": "*"}  // ✅ Top-level only
+   {"type": "symbols", "query": "*.*", "kinds": ["method"]}  // ✅ All methods
+   {"type": "symbols", "query": "UserService.*"}  // ✅ Specific class members
 
 WORKFLOW EXAMPLES:
 
 Finding all test classes efficiently:
 1. Check count: {"type": "symbols", "query": "*Test", "kinds": ["class"], "countOnly": true}
-2. If reasonable, get overview: {"type": "symbols", "query": "*Test", "kinds": ["class"], "depth": 1}
+2. If reasonable, get results: {"type": "symbols", "query": "*Test", "kinds": ["class"]}
 3. Explore specific class: {"type": "symbols", "query": "UserTest.*"}
 
 Finding where a function is used:
@@ -233,8 +239,9 @@ Jump to definition:
 2. Returns definition location with preview
 
 Exploring production code only:
-1. Exclude tests: {"type": "symbols", "kinds": ["class"], "exclude": ["**/*.test.ts", "**/*.spec.ts"], "depth": 1}
+1. Top-level classes: {"type": "symbols", "query": "*", "kinds": ["class"], "exclude": ["**/*.test.ts", "**/*.spec.ts"]}
 2. Find services: {"type": "symbols", "query": "*Service", "kinds": ["class"], "exclude": ["**/test/**"]}
+3. Service methods: {"type": "symbols", "query": "*Service.*", "kinds": ["method"], "exclude": ["**/test/**"]}
 
 Getting detailed type information:
 1. With types: {"type": "symbols", "path": "/src/utils.ts", "includeDetails": true}

@@ -8,13 +8,13 @@ The `query` tool allows Claude to get information about the codebase using VS Co
 ```json
 {
   "type": "symbols",
-  "query": "handle*",           // Optional: glob pattern to match (default: "*")
+  "query": "handle*",           // Optional: hierarchical pattern (default: "*")
   "path": "/path/to/folder",    // Optional: file or folder path (default: workspace)
   "kinds": ["class", "method"], // Optional: filter by symbol types
-  "depth": 1,                   // Optional: limit tree depth
   "exclude": ["**/test/**"],    // Optional: exclude patterns
   "includeDetails": true,       // Optional: include type signatures
-  "countOnly": true            // Optional: return only count
+  "countOnly": true,            // Optional: return only count
+  "depth": 1                    // Optional: legacy depth limiter (prefer query syntax)
 }
 ```
 
@@ -26,10 +26,16 @@ The `query` tool allows Claude to get information about the codebase using VS Co
 - `[abc]` - matches any character in set
 - `{a,b}` - matches alternatives
 
-**Hierarchical queries**:
-- `Animation.*` - all members of Animation
-- `Animation.get*` - getters in Animation
-- `*.toString` - toString in all classes
+**Hierarchical queries (control depth naturally)**:
+- `*` - top-level symbols only
+- `*.*` - top-level + direct children
+- `*.*.*` - three levels deep
+- `Animation` - just the Animation symbol
+- `Animation.*` - Animation + all direct members
+- `Animation.get*` - Animation + members starting with "get"
+- `spine.Animation.*` - namespace → class → members
+- `*.toString` - all toString methods in any class
+- `*.*`, kinds: ["method"] - all methods in all classes
 
 **Scope determination**:
 - No path → workspace search
@@ -231,26 +237,28 @@ Always returns an array:
 
 ## Best Practices for LLMs
 
-### 1. Workspace and Folder Searches - MUST Use depth or countOnly!
+### 1. Use Hierarchical Queries to Control Depth
 ```json
-// ERROR - Workspace/folder queries without depth/countOnly are rejected
-{"type": "symbols", "query": "*"}  // ❌ Error: workspace query
-{"type": "symbols", "kinds": ["class"]}  // ❌ Error: workspace query
-{"type": "symbols", "path": "/src", "query": "*Service"}  // ❌ Error: folder query
+// Query syntax naturally controls depth - no separate parameter needed
+{"type": "symbols", "query": "*"}  // ✅ Top-level only
+{"type": "symbols", "query": "*.*"}  // ✅ Two levels
+{"type": "symbols", "query": "*.*.*"}  // ✅ Three levels
+{"type": "symbols", "query": "UserService.*"}  // ✅ Class + members
 
-// GOOD - Always include depth or countOnly
-{"type": "symbols", "query": "*", "kinds": ["class"], "depth": 1}  // ✅
-{"type": "symbols", "query": "*Test", "countOnly": true}  // ✅
-{"type": "symbols", "path": "/src", "query": "*Service", "depth": 1}  // ✅
+// Combine with kinds for precision
+{"type": "symbols", "query": "*", "kinds": ["class"]}  // ✅ Top-level classes
+{"type": "symbols", "query": "*.*", "kinds": ["method"]}  // ✅ All methods
+{"type": "symbols", "query": "*.get*", "kinds": ["method"]}  // ✅ All getters
 
-// File queries don't need depth/countOnly
-{"type": "symbols", "path": "/src/file.ts"}  // ✅ OK for files
+// Too broad queries are still prevented
+{"type": "symbols", "query": "*"}  // ❌ Error if no kinds filter in workspace
+{"type": "symbols", "query": "*", "countOnly": true}  // ✅ Check size first
 ```
 
-Depth parameter behavior:
-- `depth: 1` = Symbol + immediate children only
-- `depth: 2` = Symbol + children + grandchildren
-- No depth = Full hierarchy (only allowed for file queries)
+The hierarchical query syntax is more expressive than depth parameters:
+- Each `*` represents a traversal level
+- Can match specific patterns at each level
+- Results include full context (parent → child hierarchy)
 
 ### 2. Check Count First
 ```json
