@@ -2,19 +2,36 @@ import { minimatch } from 'minimatch';
 import * as vscode from 'vscode';
 
 // Request types for each query
-interface FindSymbolsRequest {
-	type: 'findSymbols';
-	query: string;
-	path?: string; // Optional: filter results to this file or folder
-	kind?: string;
-}
+type SymbolKindName =
+	| 'module'
+	| 'namespace'
+	| 'package'
+	| 'class'
+	| 'method'
+	| 'property'
+	| 'field'
+	| 'constructor'
+	| 'enum'
+	| 'interface'
+	| 'function'
+	| 'variable'
+	| 'constant'
+	| 'string'
+	| 'null'
+	| 'enummember'
+	| 'struct'
+	| 'operator'
+	| 'type';
 
-interface OutlineRequest {
-	type: 'outline';
-	path: string;
-	symbol?: string; // Filter by name, supports wildcards and dot notation (e.g., "Animation.get*")
-	kind?: string;
-	depth?: number; // Limit depth of results (1 = only top-level)
+interface SymbolsRequest {
+	type: 'symbols';
+	query?: string; // Optional: pattern to match (default: "*")
+	path?: string; // Optional: file or folder path (default: workspace)
+	kinds?: SymbolKindName[]; // Optional: filter by symbol types
+	depth?: number; // Optional: limit tree depth
+	exclude?: string[]; // Optional: glob patterns to exclude files/folders
+	includeDetails?: boolean; // Optional: include type signatures and documentation
+	countOnly?: boolean; // Optional: return only the count of results
 }
 
 interface DiagnosticsRequest {
@@ -29,23 +46,25 @@ interface ReferencesRequest {
 	character?: number; // Optional: character position in the line (1-based)
 }
 
-export type QueryRequest = FindSymbolsRequest | OutlineRequest | DiagnosticsRequest | ReferencesRequest;
+interface DefinitionRequest {
+	type: 'definition';
+	path: string; // Required: file containing the symbol
+	line: number; // Required: line number of the symbol (1-based)
+	character?: number; // Optional: character position in the line (1-based)
+}
+
+export type QueryRequest = SymbolsRequest | DiagnosticsRequest | ReferencesRequest | DefinitionRequest;
 
 // Response types for each query
 interface Symbol {
 	name: string;
-	kind: string;
-	path: string;
-	containedIn?: string;
-	detail?: string; // Hover info - could be signature, type, or other details
-}
-
-interface OutlineSymbol {
-	name: string;
 	detail?: string;
 	kind: string;
 	location: string;
-	children?: OutlineSymbol[];
+	children?: Symbol[];
+	// Additional details when includeDetails is true
+	documentation?: string;
+	type?: string; // Type signature for functions/methods/properties
 }
 
 interface Diagnostic {
@@ -60,12 +79,23 @@ interface Reference {
 	preview: string;
 }
 
-type Result = Symbol[] | OutlineSymbol[] | Diagnostic[] | Reference[];
+interface Definition {
+	path: string;
+	range: string; // Line:col range of the definition
+	preview: string;
+	kind?: string; // Symbol kind at definition
+}
+
+interface CountResult {
+	count: number;
+}
+
+type Result = Symbol[] | Diagnostic[] | Reference[] | Definition[] | CountResult;
 
 // For batch queries, each element can be either results or an error
 export type QueryResponse = { result: Result } | { error: string };
 
-// OutlineResult is now replaced by OutlineResult above
+// Symbol type is defined above
 
 export class QueryHandler {
 	constructor(private outputChannel: vscode.OutputChannel) {}
@@ -87,17 +117,18 @@ export class QueryHandler {
 
 	private async executeSingle(request: QueryRequest): Promise<QueryResponse> {
 		this.outputChannel.appendLine(`Executing query: ${request.type}`);
+		this.outputChannel.appendLine(`Query args: ${JSON.stringify(request, null, 2)}`);
 
 		try {
 			switch (request.type) {
-				case 'findSymbols':
-					return await this.findSymbols(request);
-				case 'outline':
-					return await this.outline(request);
+				case 'symbols':
+					return await this.symbols(request);
 				case 'references':
 					return await this.findReferences(request);
 				case 'diagnostics':
 					return await this.getDiagnostics(request);
+				case 'definition':
+					return await this.findDefinition(request);
 				default: {
 					const exhaustiveCheck: never = request;
 					return { error: `Unknown query type: ${(exhaustiveCheck as QueryRequest).type}` };
@@ -106,119 +137,264 @@ export class QueryHandler {
 		} catch (error) {
 			const errorMessage = `Query execution error: ${error}`;
 			this.outputChannel.appendLine(errorMessage);
+			if (error instanceof Error && error.stack) {
+				this.outputChannel.appendLine('Stack trace:');
+				this.outputChannel.appendLine(error.stack);
+			}
 			return { error: String(error) };
 		}
 	}
 
-	private async findSymbols(request: FindSymbolsRequest): Promise<{ result: Symbol[] } | { error: string }> {
-		if (!request.query) {
-			return { error: 'Query parameter is required for findSymbols' };
-		}
-
+	private async symbols(request: SymbolsRequest): Promise<{ result: Symbol[] | CountResult } | { error: string }> {
 		try {
-			let searchQuery = request.query;
-			let containerFilter: string | undefined;
+			const query = request.query || '*';
 
-			// Check if query uses hierarchical pattern (e.g., "Pixmap.get*")
-			if (request.query.includes('.')) {
-				const parts = request.query.split('.');
-				// Search for the parent symbol
-				searchQuery = parts[0];
-				// The rest is the pattern to match within that container
-				containerFilter = parts.slice(1).join('.');
-			}
-
-			// Search workspace with the base query
-			const workspaceSymbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
-				'vscode.executeWorkspaceSymbolProvider',
-				searchQuery
-			);
-
-			if (!workspaceSymbols || workspaceSymbols.length === 0) {
-				return { error: `No symbols matching '${searchQuery}' found in workspace` };
-			}
-
-			let filteredSymbols: Symbol[];
-
-			if (containerFilter) {
-				// For hierarchical queries, we need to find symbols within the containers
-				filteredSymbols = await this.findSymbolsInContainers(
-					workspaceSymbols,
-					searchQuery,
-					containerFilter,
-					request.kind
-				);
-			} else {
-				// Regular filtering for non-hierarchical queries
-				filteredSymbols = await this.filterSymbols(workspaceSymbols, request.query, request.kind);
-			}
-
-			// If path is specified, filter to files under that path (file or folder)
+			// Determine scope from path
+			let result: { result: Symbol[] } | { error: string };
 			if (request.path) {
-				const normalizedPath = vscode.Uri.file(request.path).fsPath;
-				filteredSymbols = filteredSymbols.filter((sym) => {
-					const symPath = sym.path.split(':')[0];
-					// Check if symbol path starts with the provided path (works for both files and folders)
-					return symPath.startsWith(normalizedPath);
-				});
+				// Check if path is a file or folder
+				const uri = vscode.Uri.file(request.path);
+				try {
+					const stat = await vscode.workspace.fs.stat(uri);
+					if (stat.type === vscode.FileType.File) {
+						// File scope - use document symbols directly
+						result = await this.symbolsInFile(
+							uri,
+							query,
+							request.kinds,
+							request.depth,
+							request.includeDetails
+						);
+					} else {
+						// Folder scope - require depth or countOnly to prevent excessive results
+						if (!request.depth && !request.countOnly) {
+							return {
+								error: "Folder queries require either 'depth' or 'countOnly' to prevent excessive results. Use depth:1 for overview or countOnly:true to check size first.",
+							};
+						}
+						// Folder scope - search within folder
+						result = await this.symbolsInFolder(
+							request.path,
+							query,
+							request.kinds,
+							request.depth,
+							request.includeDetails,
+							request.exclude
+						);
+					}
+				} catch {
+					// Path doesn't exist or isn't accessible
+					return { error: `Path not found or not accessible: ${request.path}` };
+				}
+			} else {
+				// Workspace scope - require depth or countOnly to prevent excessive results
+				if (!request.depth && !request.countOnly) {
+					return {
+						error: "Workspace queries require either 'depth' or 'countOnly' to prevent excessive results. Use depth:1 for overview or countOnly:true to check size first.",
+					};
+				}
+				result = await this.symbolsInWorkspace(
+					query,
+					request.kinds,
+					request.depth,
+					request.includeDetails,
+					request.exclude
+				);
 			}
 
-			return filteredSymbols.length > 0
-				? { result: filteredSymbols }
-				: { error: `No symbols found matching criteria` };
+			// Handle countOnly
+			if (request.countOnly && 'result' in result) {
+				return { result: { count: result.result.length } };
+			}
+
+			return result;
 		} catch (error) {
+			if (error instanceof Error && error.stack) {
+				this.outputChannel.appendLine('Stack trace:');
+				this.outputChannel.appendLine(error.stack);
+			}
 			return { error: `Failed to find symbols: ${error}` };
 		}
 	}
 
-	private async outline(request: OutlineRequest): Promise<{ result: OutlineSymbol[] } | { error: string }> {
-		if (!request.path) {
-			return { error: 'Path parameter is required for outline' };
+	private async symbolsInFile(
+		uri: vscode.Uri,
+		query: string,
+		kindFilter?: SymbolKindName[],
+		depth?: number,
+		includeDetails?: boolean
+	): Promise<{ result: Symbol[] } | { error: string }> {
+		const documentSymbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+			'vscode.executeDocumentSymbolProvider',
+			uri
+		);
+
+		if (!documentSymbols || documentSymbols.length === 0) {
+			return { result: [] };
 		}
 
-		try {
-			const uri = vscode.Uri.file(request.path);
-			const documentSymbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-				'vscode.executeDocumentSymbolProvider',
-				uri
-			);
+		// Apply filtering using our existing logic
+		let filtered = this.filterSymbols(documentSymbols, query, kindFilter, '', includeDetails);
 
-			if (!documentSymbols || documentSymbols.length === 0) {
-				return { error: 'No symbols found in file' };
+		if (depth) {
+			filtered = this.limitDepth(filtered, depth);
+		}
+
+		return { result: filtered };
+	}
+
+	private async symbolsInWorkspace(
+		query: string,
+		kindFilter?: SymbolKindName[],
+		depth?: number,
+		includeDetails?: boolean,
+		exclude?: string[]
+	): Promise<{ result: Symbol[] } | { error: string }> {
+		// Extract root query for workspace search
+		const rootQuery = query.split('.')[0];
+
+		// Search workspace with root query
+		const workspaceSymbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
+			'vscode.executeWorkspaceSymbolProvider',
+			rootQuery
+		);
+
+		if (!workspaceSymbols || workspaceSymbols.length === 0) {
+			return { result: [] };
+		}
+
+		// Group symbols by file to avoid processing same file multiple times
+		const fileMap = new Map<string, vscode.SymbolInformation[]>();
+		for (const symbol of workspaceSymbols) {
+			const filePath = symbol.location.uri.fsPath;
+			if (!fileMap.has(filePath)) {
+				fileMap.set(filePath, []);
+			}
+			const symbols = fileMap.get(filePath);
+			if (symbols) {
+				symbols.push(symbol);
+			}
+		}
+
+		// Process each file and collect results
+		const results: Symbol[] = [];
+		for (const [filePath] of fileMap) {
+			// Check exclude patterns
+			if (exclude && exclude.length > 0) {
+				const shouldExclude = exclude.some((pattern) => minimatch(filePath, pattern));
+				if (shouldExclude) {
+					continue;
+				}
 			}
 
-			// Apply filtering if requested
-			let symbolData: OutlineSymbol[];
-
-			if (request.symbol || request.kind) {
-				// Use filterOutlineSymbols which handles both name and kind filtering
-				// This now properly handles hierarchical paths like "Animation.get*"
-				symbolData = this.filterOutlineSymbols(
-					documentSymbols,
-					request.symbol || '*', // If no symbol specified, match all
-					request.kind
+			try {
+				const uri = vscode.Uri.file(filePath);
+				const documentSymbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+					'vscode.executeDocumentSymbolProvider',
+					uri
 				);
 
-				if (symbolData.length === 0) {
-					const filterDesc = request.symbol
-						? `Symbols matching '${request.symbol}'${request.kind ? ` of type ${request.kind}` : ''}`
-						: `Symbols of type ${request.kind}`;
-					return { error: `${filterDesc} not found in file` };
+				if (documentSymbols && documentSymbols.length > 0) {
+					// Apply the full original query to the document symbols
+					let filtered = this.filterSymbols(documentSymbols, query, kindFilter, '', includeDetails);
+
+					if (depth) {
+						filtered = this.limitDepth(filtered, depth);
+					}
+
+					results.push(...filtered);
 				}
-			} else {
-				// No filtering - return all symbols
-				symbolData = documentSymbols.map((s) => this.convertDocumentSymbol(s));
+			} catch (fileError) {
+				// Log the error but continue processing other files
+				this.outputChannel.appendLine(`Warning: Failed to get symbols for file ${filePath}: ${fileError}`);
+				if (fileError instanceof Error && fileError.stack) {
+					this.outputChannel.appendLine('Stack trace:');
+					this.outputChannel.appendLine(fileError.stack);
+				}
+				// Continue processing other files
 			}
-
-			// Apply depth limiting if specified
-			if (request.depth) {
-				symbolData = this.limitDepth(symbolData, request.depth);
-			}
-
-			return { result: symbolData };
-		} catch (error) {
-			return { error: `Failed to get file outline: ${error}` };
 		}
+
+		return { result: results };
+	}
+
+	private async symbolsInFolder(
+		folderPath: string,
+		query: string,
+		kindFilter?: SymbolKindName[],
+		depth?: number,
+		includeDetails?: boolean,
+		exclude?: string[]
+	): Promise<{ result: Symbol[] } | { error: string }> {
+		// Use same logic as workspace but filter results to folder
+		const rootQuery = query.split('.')[0];
+
+		const workspaceSymbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
+			'vscode.executeWorkspaceSymbolProvider',
+			rootQuery
+		);
+
+		if (!workspaceSymbols || workspaceSymbols.length === 0) {
+			return { result: [] };
+		}
+
+		// Filter to only symbols in the specified folder
+		const normalizedFolder = vscode.Uri.file(folderPath).fsPath;
+		const filteredSymbols = workspaceSymbols.filter((symbol) =>
+			symbol.location.uri.fsPath.startsWith(normalizedFolder)
+		);
+
+		// Group by file and process
+		const fileMap = new Map<string, vscode.SymbolInformation[]>();
+		for (const symbol of filteredSymbols) {
+			const filePath = symbol.location.uri.fsPath;
+			if (!fileMap.has(filePath)) {
+				fileMap.set(filePath, []);
+			}
+			const symbols = fileMap.get(filePath);
+			if (symbols) {
+				symbols.push(symbol);
+			}
+		}
+
+		const results: Symbol[] = [];
+		for (const [filePath] of fileMap) {
+			// Check exclude patterns
+			if (exclude && exclude.length > 0) {
+				const shouldExclude = exclude.some((pattern) => minimatch(filePath, pattern));
+				if (shouldExclude) {
+					continue;
+				}
+			}
+
+			try {
+				const uri = vscode.Uri.file(filePath);
+				const documentSymbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+					'vscode.executeDocumentSymbolProvider',
+					uri
+				);
+
+				if (documentSymbols && documentSymbols.length > 0) {
+					let filtered = this.filterSymbols(documentSymbols, query, kindFilter, '', includeDetails);
+
+					if (depth) {
+						filtered = this.limitDepth(filtered, depth);
+					}
+
+					results.push(...filtered);
+				}
+			} catch (fileError) {
+				// Log the error but continue processing other files
+				this.outputChannel.appendLine(`Warning: Failed to get symbols for file ${filePath}: ${fileError}`);
+				if (fileError instanceof Error && fileError.stack) {
+					this.outputChannel.appendLine('Stack trace:');
+					this.outputChannel.appendLine(fileError.stack);
+				}
+				// Continue processing other files
+			}
+		}
+
+		return { result: results };
 	}
 
 	private async getDiagnostics(request: DiagnosticsRequest): Promise<{ result: Diagnostic[] } | { error: string }> {
@@ -247,6 +423,10 @@ export class QueryHandler {
 
 			return { result: diagnostics };
 		} catch (error) {
+			if (error instanceof Error && error.stack) {
+				this.outputChannel.appendLine('Stack trace:');
+				this.outputChannel.appendLine(error.stack);
+			}
 			return { error: `Failed to get diagnostics: ${error}` };
 		}
 	}
@@ -285,6 +465,10 @@ export class QueryHandler {
 
 			return { result: referencesWithPreview };
 		} catch (error) {
+			if (error instanceof Error && error.stack) {
+				this.outputChannel.appendLine('Stack trace:');
+				this.outputChannel.appendLine(error.stack);
+			}
 			return { error: `Failed to find references: ${error}` };
 		}
 	}
@@ -304,72 +488,25 @@ export class QueryHandler {
 		return `${startLine}:${startCol}-${endLine}:${endCol}`;
 	}
 
-	private nameAndKindMatches(name: string, kind: vscode.SymbolKind, query: string, kindFilter?: string): boolean {
+	private nameAndKindMatches(
+		name: string,
+		kind: vscode.SymbolKind,
+		query: string,
+		kindFilter?: SymbolKindName[]
+	): boolean {
 		const matches = this.matchesQuery(name, query);
-		const matchesKind = !kindFilter || this.parseSymbolKinds(kindFilter).includes(kind);
+		const matchesKind = !kindFilter || kindFilter.length === 0 || this.parseSymbolKinds(kindFilter).includes(kind);
 		return matches && matchesKind;
 	}
 
-	private async filterSymbols(
-		symbols: vscode.SymbolInformation[],
-		query: string,
-		kindFilter?: string
-	): Promise<Symbol[]> {
-		const result: Symbol[] = [];
-
-		for (const symbol of symbols) {
-			if (this.nameAndKindMatches(symbol.name, symbol.kind, query, kindFilter)) {
-				result.push(await this.convertSymbolInformation(symbol));
-			}
-		}
-		return result;
-	}
-
-	private async convertSymbolInformation(symbol: vscode.SymbolInformation): Promise<Symbol> {
-		// TODO: Optimize by batching hover requests or caching results
-		// Currently makes one hover request per symbol which can be slow for large result sets
-		let detail: string = '';
-		try {
-			const hoverInfos = await vscode.commands.executeCommand<vscode.Hover[]>(
-				'vscode.executeHoverProvider',
-				symbol.location.uri,
-				symbol.location.range.start
-			);
-
-			if (hoverInfos && hoverInfos.length > 0) {
-				// Extract signature from hover content
-				for (const hover of hoverInfos) {
-					const contents = hover.contents;
-					for (const content of contents) {
-						if (typeof content === 'string') {
-							detail = (detail || '') + content.trim();
-						} else if ('value' in content) {
-							// Code block - often contains the signature, type info, etc.
-							detail = (detail || '') + content.value.trim();
-						}
-					}
-				}
-			}
-		} catch {
-			// Hover might not be available, that's OK
-		}
-
-		return {
-			name: symbol.name,
-			kind: vscode.SymbolKind[symbol.kind],
-			path: `${symbol.location.uri.fsPath}:${this.formatRange(symbol.location.range)}`,
-			containedIn: symbol.containerName || undefined,
-			detail: detail || undefined, // Convert empty string to undefined
-		};
-	}
-
-	private filterOutlineSymbols(
+	private filterSymbols(
 		symbols: vscode.DocumentSymbol[],
 		query: string,
-		kindFilter?: string,
-		parentPath: string = ''
-	): OutlineSymbol[] {
-		const result: OutlineSymbol[] = [];
+		kindFilter?: SymbolKindName[],
+		parentPath: string = '',
+		includeDetails?: boolean
+	): Symbol[] {
+		const result: Symbol[] = [];
 
 		for (const symbol of symbols) {
 			// Build the full hierarchical path for this symbol
@@ -380,23 +517,29 @@ export class QueryHandler {
 
 			if (symbolMatches) {
 				// Symbol matches: include it with ALL its children (unfiltered)
-				const outline = this.convertDocumentSymbol(symbol);
-				result.push(outline);
+				const sym = this.convertDocumentSymbol(symbol, includeDetails);
+				result.push(sym);
 			} else if (symbol.children && symbol.children.length > 0) {
 				// Symbol doesn't match: check if any descendants match
 				// Pass the current full path as parent path for children
-				const filteredChildren = this.filterOutlineSymbols(symbol.children, query, kindFilter, fullPath);
+				const filteredChildren = this.filterSymbols(
+					symbol.children,
+					query,
+					kindFilter,
+					fullPath,
+					includeDetails
+				);
 
 				if (filteredChildren.length > 0) {
 					// Has matching descendants: include this symbol as context with only the filtered children
-					const outline: OutlineSymbol = {
+					const sym: Symbol = {
 						name: symbol.name,
 						detail: symbol.detail,
 						kind: vscode.SymbolKind[symbol.kind],
 						location: this.formatRange(symbol.range),
 						children: filteredChildren,
 					};
-					result.push(outline);
+					result.push(sym);
 				}
 			}
 			// else: symbol doesn't match and has no matching descendants - exclude it
@@ -405,17 +548,29 @@ export class QueryHandler {
 		return result;
 	}
 
-	private convertDocumentSymbol(symbol: vscode.DocumentSymbol): OutlineSymbol {
-		return {
+	private convertDocumentSymbol(symbol: vscode.DocumentSymbol, includeDetails?: boolean): Symbol {
+		const result: Symbol = {
 			name: symbol.name,
 			detail: symbol.detail,
 			kind: vscode.SymbolKind[symbol.kind],
 			location: this.formatRange(symbol.range),
 			children:
 				symbol.children && symbol.children.length > 0
-					? symbol.children.map((s) => this.convertDocumentSymbol(s))
+					? symbol.children.map((s) => this.convertDocumentSymbol(s, includeDetails))
 					: undefined,
 		};
+
+		// Add additional details if requested
+		if (includeDetails) {
+			// Note: VS Code's DocumentSymbol doesn't provide documentation or full type signatures
+			// We include what's available in the detail field
+			// For richer information, we'd need to use other language server features
+			if (symbol.detail) {
+				result.type = symbol.detail;
+			}
+		}
+
+		return result;
 	}
 
 	private convertDiagnostics(path: string, diagnostics: vscode.Diagnostic[]) {
@@ -427,7 +582,7 @@ export class QueryHandler {
 		}));
 	}
 
-	private limitDepth(symbols: OutlineSymbol[], maxDepth: number, currentDepth: number = 1): OutlineSymbol[] {
+	private limitDepth(symbols: Symbol[], maxDepth: number, currentDepth: number = 1): Symbol[] {
 		return symbols.map((symbol) => {
 			if (currentDepth >= maxDepth) {
 				// Remove children if we've reached max depth
@@ -443,99 +598,92 @@ export class QueryHandler {
 		});
 	}
 
-	private async findSymbolsInContainers(
-		containers: vscode.SymbolInformation[],
-		containerQuery: string,
-		memberPattern: string,
-		kindFilter?: string
-	): Promise<Symbol[]> {
-		const results: Symbol[] = [];
-
-		// First, filter containers to only those matching the container query
-		const matchingContainers = containers.filter((container) => this.matchesQuery(container.name, containerQuery));
-
-		// For each matching container, find members in the same file
-		for (const container of matchingContainers) {
-			// Get all symbols in the same file
-			const uri = container.location.uri;
-			const documentSymbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-				'vscode.executeDocumentSymbolProvider',
-				uri
+	private async findDefinition(request: DefinitionRequest): Promise<{ result: Definition[] } | { error: string }> {
+		try {
+			const uri = vscode.Uri.file(request.path);
+			const position = new vscode.Position(
+				request.line - 1, // Convert to 0-based
+				request.character ? request.character - 1 : 0
 			);
 
-			if (documentSymbols && documentSymbols.length > 0) {
-				// Find the container in the document symbols
-				const containerSymbol = this.findSymbolByName(documentSymbols, container.name);
-				if (containerSymbol?.children) {
-					// Filter children by the member pattern
-					for (const child of containerSymbol.children) {
-						if (this.nameAndKindMatches(child.name, child.kind, memberPattern, kindFilter)) {
-							// Convert to our Symbol format
-							const symbol: Symbol = {
-								name: child.name,
-								kind: vscode.SymbolKind[child.kind],
-								path: `${uri.fsPath}:${this.formatRange(child.range)}`,
-								containedIn: container.name,
-							};
-							// Try to get detail/hover info
-							try {
-								const hoverInfos = await vscode.commands.executeCommand<vscode.Hover[]>(
-									'vscode.executeHoverProvider',
-									uri,
-									child.range.start
-								);
-								if (hoverInfos && hoverInfos.length > 0) {
-									let detail = '';
-									for (const hover of hoverInfos) {
-										for (const content of hover.contents) {
-											if (typeof content === 'string') {
-												detail += content.trim();
-											} else if ('value' in content) {
-												detail += content.value.trim();
-											}
-										}
-									}
-									if (detail) {
-										symbol.detail = detail;
-									}
-								}
-							} catch {
-								// Hover might not be available
-							}
-							results.push(symbol);
+			// Find definition at this position
+			const definitions = await vscode.commands.executeCommand<vscode.Location | vscode.Location[]>(
+				'vscode.executeDefinitionProvider',
+				uri,
+				position
+			);
+
+			if (!definitions) {
+				return { result: [] };
+			}
+
+			// Normalize to array
+			const definitionArray = Array.isArray(definitions) ? definitions : [definitions];
+
+			// Convert to our format
+			const results = await Promise.all(
+				definitionArray.map(async (def) => {
+					const document = await vscode.workspace.openTextDocument(def.uri);
+					const line = document.lineAt(def.range.start.line);
+
+					// Try to get symbol information at the definition location
+					const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+						'vscode.executeDocumentSymbolProvider',
+						def.uri
+					);
+
+					let symbolKind: string | undefined;
+					if (symbols) {
+						// Find the symbol at this location
+						const symbol = this.findSymbolAtPosition(symbols, def.range.start);
+						if (symbol) {
+							symbolKind = vscode.SymbolKind[symbol.kind];
 						}
 					}
-				}
-			}
-		}
 
-		return results;
+					return {
+						path: `${def.uri.fsPath}:${def.range.start.line + 1}:${def.range.start.character + 1}`,
+						range: this.formatRange(def.range),
+						preview: line.text.trim(),
+						kind: symbolKind,
+					};
+				})
+			);
+
+			return { result: results };
+		} catch (error) {
+			if (error instanceof Error && error.stack) {
+				this.outputChannel.appendLine('Stack trace:');
+				this.outputChannel.appendLine(error.stack);
+			}
+			return { error: `Failed to find definition: ${error}` };
+		}
 	}
 
-	private findSymbolByName(symbols: vscode.DocumentSymbol[], name: string): vscode.DocumentSymbol | undefined {
+	private findSymbolAtPosition(
+		symbols: vscode.DocumentSymbol[],
+		position: vscode.Position
+	): vscode.DocumentSymbol | undefined {
 		for (const symbol of symbols) {
-			if (symbol.name === name) {
-				return symbol;
-			}
-			if (symbol.children?.length) {
-				const found = this.findSymbolByName(symbol.children, name);
-				if (found) {
-					return found;
+			if (symbol.range.contains(position)) {
+				// Check if any child contains the position more precisely
+				if (symbol.children && symbol.children.length > 0) {
+					const child = this.findSymbolAtPosition(symbol.children, position);
+					if (child) {
+						return child;
+					}
 				}
+				return symbol;
 			}
 		}
 		return undefined;
 	}
 
-	private parseSymbolKinds(kindString: string): vscode.SymbolKind[] {
+	private parseSymbolKinds(kindNames: SymbolKindName[]): vscode.SymbolKind[] {
 		const kinds: vscode.SymbolKind[] = [];
-		const kindNames = kindString
-			.toLowerCase()
-			.split(',')
-			.map((k) => k.trim());
 
 		for (const kindName of kindNames) {
-			switch (kindName) {
+			switch (kindName.toLowerCase()) {
 				case 'module':
 					kinds.push(vscode.SymbolKind.Module);
 					break;

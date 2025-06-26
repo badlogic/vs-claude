@@ -97,9 +97,15 @@ Notes:
 PREFER THIS over grep/ripgrep for finding symbols, understanding code structure, or navigating code.
 Uses Language Server Protocol (LSP) for accurate, language-aware results across all file types.
 
+⚠️ IMPORTANT: Workspace and folder queries REQUIRE either 'depth' or 'countOnly' parameter:
+- For overview: Use depth:1 (e.g., {"type": "symbols", "kinds": ["class"], "depth": 1})
+- To check size first: Use countOnly:true
+- Without these, workspace/folder queries will be rejected to prevent excessive results
+- File queries don't have this requirement
+
 Supports single query or batch queries (executed in parallel):
-Single: {"type": "findSymbols", "query": "UserService"}
-Batch: [{"type": "findSymbols", "query": "get*"}, {"type": "outline", "path": "/path/to/file.ts"}]
+Single: {"type": "symbols", "query": "UserService", "kinds": ["class"], "depth": 1}
+Batch: [{"type": "symbols", "query": "get*", "kinds": ["method"], "depth": 1}, {"type": "symbols", "path": "/path/to/file.ts"}]
 
 RESPONSE FORMAT: Always returns array, even for single query.
 Success: [{"result": [...]}] or [{"result": []}] for no matches
@@ -107,53 +113,112 @@ Error: [{"error": "error message"}]
 
 QUERY TYPES:
 
-1. findSymbols - Search symbols across workspace, folder, or file. Supports hierarchical queries.
-   Required: query (string) - Symbol name with glob patterns (*, ?, [abc], {a,b}) or hierarchical (Container.member*)
-   Optional: path (string) - Filter to specific file or folder
-   Optional: kind (string) - Symbol types: class, method, function, interface, property, field, variable, constant, enum, namespace, module, struct, type
+1. symbols - Unified symbol search with hierarchical results
+   Optional: query (string) - Pattern to match (default: "*")
+   Optional: path (string) - File or folder path (default: workspace)
+   RECOMMENDED: kinds (array) - Symbol types to filter results
+   REQUIRED for workspace/folder: depth (number) OR countOnly (boolean) - Prevent excessive results
+   Optional: exclude (array) - Glob patterns to exclude files/folders
+   Optional: includeDetails (boolean) - Include type signatures (when available)
+   
+   Depth parameter behavior:
+   - depth: 1 = Symbol + immediate children only
+   - depth: 2 = Symbol + children + grandchildren
+   - No depth = Full hierarchy (only allowed for file queries)
 
-   {"type": "findSymbols", "query": "UserService"}  // exact match
-   {"type": "findSymbols", "query": "get*", "kind": "method"}  // all getter methods
-   {"type": "findSymbols", "query": "*Test", "kind": "class"}  // test classes
-   {"type": "findSymbols", "query": "{get,set}*"}  // getters and setters
-   {"type": "findSymbols", "query": "*Service", "path": "/path/to/src"}  // services in src folder
-   {"type": "findSymbols", "query": "Pixmap.get*"}  // getters in Pixmap class
-   {"type": "findSymbols", "query": "Animation.*", "kind": "method"}  // methods in Animation
+   Symbol kinds: module, namespace, package, class, method, property, field,
+                constructor, enum, interface, function, variable, constant,
+                string, null, enummember, struct, operator, type
 
-2. outline - Get file structure with hierarchy
-   Required: path (string) - Absolute file path
-   Optional: symbol (string) - Filter with patterns, supports dot notation for scoping
-   Optional: kind (string) - Comma-separated symbol types
-   Optional: depth (number) - Limit tree depth (1 = top-level only)
+   WORKSPACE QUERIES (must have depth or countOnly):
+   {"type": "symbols", "query": "*Test", "kinds": ["class"], "depth": 1}  // overview of test classes
+   {"type": "symbols", "query": "*Service", "kinds": ["class", "interface"], "depth": 1}  // service types
+   {"type": "symbols", "kinds": ["class"], "depth": 1}  // all top-level classes
+   {"type": "symbols", "kinds": ["class"], "exclude": ["**/node_modules/**", "**/*.test.ts"], "depth": 1}  // exclude patterns
+   {"type": "symbols", "query": "process*", "countOnly": true}  // check result count first
 
-   {"type": "outline", "path": "/path/to/file.ts"}  // full file structure
-   {"type": "outline", "path": "/path/to/file.ts", "depth": 1}  // top-level only
-   {"type": "outline", "path": "/path/to/file.java", "symbol": "Animation.*"}  // Animation's members
-   {"type": "outline", "path": "/path/to/file.java", "symbol": "Animation.get*"}  // Animation's getters
-   {"type": "outline", "path": "/path/to/file.ts", "kind": "class,interface"}  // only types
+   FOLDER QUERIES (must have depth or countOnly):
+   {"type": "symbols", "path": "/path/to/src", "query": "*Service", "depth": 1}  // services in folder
+   {"type": "symbols", "path": "/path/to/src", "kinds": ["class"], "countOnly": true}  // count classes in folder
+   
+   FILE QUERIES (depth/countOnly optional):
+   {"type": "symbols", "path": "/path/to/file.ts"}  // complete file structure
+   {"type": "symbols", "path": "/path/to/file.ts", "includeDetails": true}  // with type info
 
-3. diagnostics - Get errors, warnings, and issues
+   HIERARCHICAL QUERIES (for drilling down):
+   {"type": "symbols", "query": "Animation.*"}  // all members of Animation class
+   {"type": "symbols", "query": "Animation.get*"}  // getters in Animation class
+   {"type": "symbols", "query": "*.toString"}  // toString in all classes
+
+2. diagnostics - Get errors, warnings, and issues
    Optional: path (string) - Specific file or omit for entire workspace
 
    {"type": "diagnostics"}  // all workspace diagnostics
    {"type": "diagnostics", "path": "/path/to/file.ts"}  // single file diagnostics
 
-4. references - Find all usages of symbol at specific location
+3. references - Find all usages of symbol at specific location
+   ⚠️ IMPORTANT: You must FIRST use symbols query to find the symbol's location!
    Required: path (string) - File containing the symbol
-   Required: line (number) - Line number, 1-based
+   Required: line (number) - Line number, 1-based (from symbols query result)
    Optional: character (number) - Column position, 1-based
 
+   WORKFLOW:
+   1. Find symbol: {"type": "symbols", "query": "processData", "kinds": ["function", "method"]}
+   2. Get location from result (e.g., "/path/file.ts" at line "42:5-45:10")
+   3. Find references: {"type": "references", "path": "/path/file.ts", "line": 42}
+
+   Examples:
    {"type": "references", "path": "/path/to/file.ts", "line": 42}  // find usages
    {"type": "references", "path": "/path/to/file.ts", "line": 42, "character": 15}  // precise
 
-USAGE PATTERNS:
-- Find class members: Use hierarchical queries like "ClassName.get*" or "ClassName.*"
-- Explore large files: Use outline with depth:1, then drill down with symbol filters
-- Find methods across classes: "*.methodName" finds methodName in all classes
+4. definition - Find where a symbol is defined (go to definition)
+   Required: path (string) - File containing the symbol usage
+   Required: line (number) - Line number, 1-based
+   Optional: character (number) - Column position, 1-based
+
+   Returns definition location(s) with preview and symbol kind.
+   Useful for jumping from usage to declaration.
+
+   Examples:
+   {"type": "definition", "path": "/src/app.ts", "line": 25}  // find definition
+   {"type": "definition", "path": "/src/app.ts", "line": 25, "character": 10}  // precise
+
+BEST PRACTICES:
+1. WORKSPACE SEARCHES: Must use depth OR countOnly (queries without these are rejected)
+2. DRILL DOWN: Use hierarchical queries (Class.*) for specific classes
+3. BE SPECIFIC: Combine query + kinds to narrow results
+4. ERROR EXAMPLES:
+   {"type": "symbols", "kinds": ["class"]}  // ❌ ERROR: Missing depth/countOnly
+   {"type": "symbols", "kinds": ["class"], "depth": 1}  // ✅ Good
+   {"type": "symbols", "query": "*Test", "countOnly": true}  // ✅ Good
+
+WORKFLOW EXAMPLES:
+
+Finding all test classes efficiently:
+1. Check count: {"type": "symbols", "query": "*Test", "kinds": ["class"], "countOnly": true}
+2. If reasonable, get overview: {"type": "symbols", "query": "*Test", "kinds": ["class"], "depth": 1}
+3. Explore specific class: {"type": "symbols", "query": "UserTest.*"}
+
+Finding where a function is used:
+1. Find function: {"type": "symbols", "query": "processData", "kinds": ["function", "method"]}
+2. Get location from result (e.g., "/src/utils.ts" line 42)
+3. Find usages: {"type": "references", "path": "/src/utils.ts", "line": 42}
+
+Jump to definition:
+1. From usage at line 25: {"type": "definition", "path": "/src/app.ts", "line": 25}
+2. Returns definition location with preview
+
+Exploring production code only:
+1. Exclude tests: {"type": "symbols", "kinds": ["class"], "exclude": ["**/*.test.ts", "**/*.spec.ts"], "depth": 1}
+2. Find services: {"type": "symbols", "query": "*Service", "kinds": ["class"], "exclude": ["**/test/**"]}
+
+Getting detailed type information:
+1. With types: {"type": "symbols", "path": "/src/utils.ts", "includeDetails": true}
+2. Shows function signatures and property types when available
 
 LIMITATIONS:
-- Requires language server support (varies by file type and installed extensions)
-- Files must be in VS Code workspace to be indexed
+- Workspace queries without filters may exceed response limits
+- Requires language server support (varies by file type)
 - All paths must be absolute
 - Glob patterns: * (any chars), ? (one char), [abc] (char set), {a,b} (alternatives)`),
 			mcp.WithObject("args",

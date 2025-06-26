@@ -4,79 +4,80 @@ The `query` tool allows Claude to get information about the codebase using VS Co
 
 ## Implemented Query Types
 
-### 1. Find Symbols
+### 1. Symbols - Unified Symbol Search
 ```json
 {
-  "type": "findSymbols",
-  "query": "handle*",        // supports glob patterns: *, ?, [abc], {a,b}
-  "path": "/path/to/file.ts", // optional - filter results to this file
-  "kind": "class,interface"   // optional - filter by symbol type
+  "type": "symbols",
+  "query": "handle*",           // Optional: glob pattern to match (default: "*")
+  "path": "/path/to/folder",    // Optional: file or folder path (default: workspace)
+  "kinds": ["class", "method"], // Optional: filter by symbol types
+  "depth": 1,                   // Optional: limit tree depth
+  "exclude": ["**/test/**"],    // Optional: exclude patterns
+  "includeDetails": true,       // Optional: include type signatures
+  "countOnly": true            // Optional: return only count
 }
 ```
 
-Examples:
-- `"*"` - all symbols
-- `"get*"` - all getters
-- `"*Test"` - all test classes
-- `"{get,set}*"` - getters and setters
-- `"[A-Z]*Service"` - services starting with uppercase
+**Symbol kinds**: module, namespace, package, class, method, property, field, constructor, enum, interface, function, variable, constant, string, null, enummember, struct, operator, type
 
-Returns: Symbol name, kind, full path with line:col ranges, container, and hover detail
+**Glob patterns**: 
+- `*` - matches any characters
+- `?` - matches one character
+- `[abc]` - matches any character in set
+- `{a,b}` - matches alternatives
 
-### 2. Get File Outline
-```json
-{
-  "type": "outline",
-  "path": "/path/to/file.ts",
-  "symbol": "Animation.get*",  // optional - filter with hierarchical patterns
-  "kind": "method,property",   // optional - filter by symbol type
-  "depth": 1                  // optional - limit depth (1 = top-level only)
-}
-```
+**Hierarchical queries**:
+- `Animation.*` - all members of Animation
+- `Animation.get*` - getters in Animation
+- `*.toString` - toString in all classes
 
-Examples:
-- `"symbol": "Animation"` - show Animation class only
-- `"symbol": "Animation.*"` - show Animation's members
-- `"symbol": "Animation.get*"` - show Animation's getters
-- `"depth": 1` - show only top-level symbols
+**Scope determination**:
+- No path → workspace search
+- File path → file structure
+- Folder path → folder search
 
-Returns: Hierarchical tree structure with names, kinds, locations, and optional children
+Returns: Hierarchical symbol tree with names, kinds, locations, and optionally type info
 
-### 3. Get Diagnostics
+### 2. Diagnostics - Errors and Warnings
 ```json
 {
   "type": "diagnostics",
-  "path": "/path/to/file.ts" // optional - if omitted, returns all workspace diagnostics
+  "path": "/path/to/file.ts" // Optional: specific file or entire workspace
 }
 ```
 
-Returns: File path with line:col, severity (error/warning/info), message, and source
+Returns: File paths with line:col, severity (error/warning/info), message, and source
 
-### 4. Find References
+### 3. References - Find All Usages
 ```json
 {
   "type": "references",
-  "path": "/path/to/file.ts",  // required - file containing the symbol
-  "line": 42,                  // required - line number (1-based)
-  "character": 15              // optional - character position (1-based)
+  "path": "/path/to/file.ts",  // Required: file containing the symbol
+  "line": 42,                  // Required: line number (1-based)
+  "character": 15              // Optional: column position (1-based)
 }
 ```
 
-Returns: All locations where the symbol at this position is referenced, with preview text
+**Important**: You must first use symbols query to find the symbol's location!
 
-## Pattern Matching
+Workflow:
+1. Find symbol: `{"type": "symbols", "query": "processData", "kinds": ["function"]}`
+2. Get location from result (e.g., line 42)
+3. Find references: `{"type": "references", "path": "/path/file.ts", "line": 42}`
 
-All symbol queries support glob patterns via minimatch:
-- `*` - matches any number of characters
-- `?` - matches exactly one character  
-- `[abc]` - matches any character in the set
-- `[a-z]` - matches any character in the range
-- `{a,b,c}` - matches any of the alternatives
+Returns: All locations where the symbol is referenced, with preview text
 
-Hierarchical queries use dot notation:
-- `ClassName.methodName` - specific method in a class
-- `ClassName.*` - all members of a class
-- `Namespace.Class.method*` - nested hierarchies
+### 4. Definition - Go to Definition
+```json
+{
+  "type": "definition",
+  "path": "/path/to/file.ts",  // Required: file containing the usage
+  "line": 25,                  // Required: line number (1-based)
+  "character": 10              // Optional: column position (1-based)
+}
+```
+
+Returns: Definition location(s) with preview, range, and symbol kind
 
 ## Response Format
 
@@ -84,18 +85,19 @@ Queries can be single or batched:
 
 **Single query:**
 ```json
-{"type": "findSymbols", "query": "handle*"}
+{"type": "symbols", "query": "handle*", "kinds": ["function"]}
 ```
 
 **Batch query:**
 ```json
 [
-  {"type": "findSymbols", "query": "handle*"},
-  {"type": "outline", "path": "/path/to/file.ts"}
+  {"type": "symbols", "query": "handle*", "kinds": ["function"]},
+  {"type": "symbols", "path": "/path/to/file.ts"}
 ]
 ```
 
 **Response format:**
+Always returns an array:
 ```json
 [
   {"result": [...]},           // Success with results
@@ -103,178 +105,152 @@ Queries can be single or batched:
 ]
 ```
 
-## Future Query Types
-
-### Go to Definition
-```json
-{
-  "type": "definition",
-  "symbol": "processUser",      // symbol name to find
-  "path": "/path/to/file.ts"    // optional - search in specific file or workspace
-}
-```
-Returns: Location(s) where the symbol is defined
-
-### 6. Find Implementations
-```json
-{
-  "type": "implementations",
-  "symbol": "UserInterface",    // interface/abstract class name
-  "path": "/path/to/file.ts"    // optional - search in specific file or workspace
-}
-```
-Returns: All implementations of this interface/abstract class
-
-### 7. Get Type Info (replaces hover)
-```json
-{
-  "type": "typeInfo",
-  "symbol": "processUser",      // symbol name
-  "path": "/path/to/file.ts"    // optional - specific file or workspace
-}
-```
-Returns: Type signature and documentation for the symbol
-
-### 8. Get Completions (questionable value)
-```json
-{
-  "type": "completions",
-  "prefix": "user.",            // what comes before the completion point
-  "path": "/path/to/file.ts",
-  "context": "const result = user." // optional surrounding code
-}
-```
-Returns: Available methods/properties after the prefix
-
-## Response Format
-
-Success case:
-```json
-{
-  "success": true,
-  "data": {
-    // Query-specific data
-  }
-}
-```
-
-Error case:
-```json
-{
-  "success": false,
-  "error": "Language server not available for this file type"
-}
-```
-
 ## Example Responses
 
-### Find Symbols Response
+### Symbols Response
 ```json
-{
-  "success": true,
-  "data": {
-    "symbols": [
-      {
-        "name": "handleOpen",
-        "kind": "function",
-        "path": "/src/handler.ts",
-        "line": 45,
-        "containerName": "OpenHandler"
-      },
-      {
-        "name": "handleClose", 
-        "kind": "method",
-        "path": "/src/handler.ts",
-        "line": 67,
-        "containerName": "CloseHandler"
-      }
-    ]
-  }
-}
+[{
+  "result": [
+    {
+      "name": "UserService",
+      "kind": "Class",
+      "location": "42:1-156:2",
+      "detail": "export class UserService",
+      "type": "export class UserService", // When includeDetails: true
+      "children": [
+        {
+          "name": "getUser",
+          "kind": "Method",
+          "location": "45:3-48:4",
+          "type": "getUser(id: string): Promise<User>"
+        }
+      ]
+    }
+  ]
+}]
 ```
 
-### File Outline Response
+### Count Only Response
 ```json
-{
-  "success": true,
-  "data": {
-    "symbols": [
-      {
-        "name": "UserInterface",
-        "kind": "interface",
-        "line": 5,
-        "children": [
-          {"name": "id", "kind": "property", "line": 6},
-          {"name": "name", "kind": "property", "line": 7}
-        ]
-      },
-      {
-        "name": "processUser",
-        "kind": "function", 
-        "line": 15
-      }
-    ]
+[{
+  "result": {
+    "count": 523
   }
-}
-```
-
-### Diagnostics Response
-```json
-{
-  "success": true,
-  "data": {
-    "diagnostics": [
-      {
-        "path": "/src/index.ts",
-        "line": 10,
-        "column": 5,
-        "severity": "error",
-        "message": "Cannot find name 'nonExistentVar'",
-        "source": "ts"
-      }
-    ]
-  }
-}
+}]
 ```
 
 ### References Response
 ```json
+[{
+  "result": [
+    {
+      "path": "/src/api/handler.ts:23:15",
+      "preview": "  const result = await processUser(userData);"
+    },
+    {
+      "path": "/src/tests/user.test.ts:45:20",
+      "preview": "    expect(processUser(mockUser)).resolves.toBeDefined();"
+    }
+  ]
+}]
+```
+
+### Definition Response
+```json
+[{
+  "result": [
+    {
+      "path": "/src/services/user.ts:15:1",
+      "range": "15:1-20:2",
+      "preview": "export function processUser(data: UserData): Promise<User> {",
+      "kind": "Function"
+    }
+  ]
+}]
+```
+
+### Diagnostics Response
+```json
+[{
+  "result": [
+    {
+      "path": "/src/index.ts:10:5",
+      "severity": "error",
+      "message": "Cannot find name 'nonExistentVar'",
+      "source": "ts"
+    }
+  ]
+}]
+```
+
+## Best Practices for LLMs
+
+### 1. Workspace and Folder Searches - MUST Use depth or countOnly!
+```json
+// ERROR - Workspace/folder queries without depth/countOnly are rejected
+{"type": "symbols", "query": "*"}  // ❌ Error: workspace query
+{"type": "symbols", "kinds": ["class"]}  // ❌ Error: workspace query
+{"type": "symbols", "path": "/src", "query": "*Service"}  // ❌ Error: folder query
+
+// GOOD - Always include depth or countOnly
+{"type": "symbols", "query": "*", "kinds": ["class"], "depth": 1}  // ✅
+{"type": "symbols", "query": "*Test", "countOnly": true}  // ✅
+{"type": "symbols", "path": "/src", "query": "*Service", "depth": 1}  // ✅
+
+// File queries don't need depth/countOnly
+{"type": "symbols", "path": "/src/file.ts"}  // ✅ OK for files
+```
+
+Depth parameter behavior:
+- `depth: 1` = Symbol + immediate children only
+- `depth: 2` = Symbol + children + grandchildren
+- No depth = Full hierarchy (only allowed for file queries)
+
+### 2. Check Count First
+```json
+// Step 1: Check how many results
+{"type": "symbols", "query": "*Test", "kinds": ["class"], "countOnly": true}
+
+// Step 2: If reasonable, get results
+{"type": "symbols", "query": "*Test", "kinds": ["class"], "depth": 1}
+```
+
+### 3. Exclude Patterns
+```json
+// Production code only
 {
-  "success": true,
-  "data": {
-    "references": [
-      {
-        "path": "/src/api/handler.ts",
-        "line": 23,
-        "column": 15,
-        "preview": "  const result = await processUser(userData);"
-      },
-      {
-        "path": "/src/tests/user.test.ts", 
-        "line": 45,
-        "column": 20,
-        "preview": "    expect(processUser(mockUser)).resolves.toBeDefined();"
-      }
-    ]
-  }
+  "type": "symbols",
+  "kinds": ["class"],
+  "exclude": ["**/test/**", "**/node_modules/**", "**/*.spec.ts"]
 }
+```
+
+### 4. Hierarchical Exploration
+```json
+// Step 1: Find classes
+{"type": "symbols", "kinds": ["class", "interface"], "depth": 1}
+
+// Step 2: Explore specific class
+{"type": "symbols", "query": "UserService.*"}
+
+// Step 3: Find specific members
+{"type": "symbols", "query": "UserService.get*", "kinds": ["method"]}
 ```
 
 ## Implementation Notes
 
-1. **Critical Question**: Can VS Code's language features work on unopened files? This determines if the tool provides value over grep/ripgrep.
-2. **Symbol-based queries**: Most queries now use symbol names instead of line/column positions, making them more practical for Claude to use
-3. **Symbol resolution**: The extension needs to search for symbols by name when line/column not provided
-4. **Go MCP Server**: Just passes the entire query object through as JSON - no parsing needed
-5. **Extension**: Uses VS Code APIs (`vscode.languages.*`, `vscode.workspace.*`)
-6. **Language Server Protocol**: Most intelligence comes from LSP
-7. **Graceful Degradation**: Not all features available for all languages
-8. **Performance**: Some queries might be slow - handle timeouts appropriately
+1. **Language Server Integration**: All queries use VS Code's language servers for accurate results
+2. **File Processing**: When searching workspace/folder, processes each file individually
+3. **Error Handling**: Continues processing even if some files fail (e.g., JAR files)
+4. **Performance**: Large workspace queries can be slow - use filters
+5. **Caching**: Currently no caching - each query executes fresh
+6. **Details Limitation**: `includeDetails` provides what's available from DocumentSymbol (mainly the detail field)
 
 ## Why These Queries Help Claude
 
-- **Find Symbols**: Better than grep because it understands code structure (e.g., distinguishes between `handleOpen` function vs `handleOpen` string)
-- **File Outline**: Quickly understand what's in a file without reading all of it
+- **Symbols**: Better than grep - understands code structure, hierarchies, and relationships
 - **Diagnostics**: See errors without running build commands
-- **References**: Understand impact before making changes (e.g., "where is this function used?")
-- **Type Info**: Get type signatures without finding and reading type definitions
+- **References**: Understand impact before making changes
+- **Definition**: Navigate from usage to declaration
+- **Exclude/Count**: Handle large codebases efficiently
+- **Hierarchical**: Explore code structure naturally (Class → Methods → Details)

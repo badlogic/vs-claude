@@ -42,6 +42,9 @@ export class OpenHandler {
 	constructor(private outputChannel: vscode.OutputChannel) {}
 
 	async execute(args: OpenArgs): Promise<{ success: boolean; error?: string }> {
+		this.outputChannel.appendLine(`Executing open command`);
+		this.outputChannel.appendLine(`Open args: ${JSON.stringify(args, null, 2)}`);
+
 		try {
 			// Normalize to array of items
 			let items: OpenItem[];
@@ -81,6 +84,10 @@ export class OpenHandler {
 			return { success: true };
 		} catch (error) {
 			this.outputChannel.appendLine(`Open command error: ${error}`);
+			if (error instanceof Error && error.stack) {
+				this.outputChannel.appendLine('Stack trace:');
+				this.outputChannel.appendLine(error.stack);
+			}
 			return { success: false, error: String(error) };
 		}
 	}

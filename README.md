@@ -16,6 +16,9 @@ VS Claude acts as a bridge between Claude and your VS Code editor. When you're c
   - "Find all test classes ending with 'Test'"
   - "List all the types in this Dart file without their members"
   - "Find all references to the processData function"
+  - "Jump to the definition of this symbol"
+  - "Find all production services (excluding tests)"
+  - "Count how many test classes we have"
   
 - **Open specific files in your VS Code editor**
   - "Open the main.go file in VS Code"
@@ -131,9 +134,11 @@ The extension includes a built-in query tester:
 3. Use the web UI to test different query types
 
 Example queries to try:
-- Find all classes: `query="*" kind="class"`
-- Find getters in a class: `symbol="ClassName.get*"`
-- List top-level types: `depth="1" kind="class,interface"`
+- Find all classes: `query="*" kinds=["class"] depth=1`
+- Find getters in a class: `query="Animation.get*" kinds=["method"]`
+- List production code only: `kinds=["class"] exclude=["**/test/**"]`
+- Check result count: `query="*Test" kinds=["class"] countOnly=true`
+- Get type details: `path="/src/file.ts" includeDetails=true`
 
 ### Debugging the MCP Server
 
@@ -186,24 +191,31 @@ Queries VS Code's language intelligence for semantic code understanding.
 
 **Query Types:**
 
-1. **findSymbols** - Search for symbols across the workspace
+1. **symbols** - Unified symbol search with hierarchical results
    - Supports glob patterns: `*`, `?`, `[abc]`, `{a,b}`
-   - Examples: `get*` (getters), `*Test` (test classes), `{get,set}*` (getters/setters)
+   - Hierarchical queries: `Animation.get*` (getters in Animation class)
+   - Filter by kinds: `["class", "interface", "method"]`
+   - Exclude patterns: `["**/node_modules/**", "**/*.test.ts"]`
+   - Count only mode: Check result size before fetching
+   - Include details: Get type signatures when available
 
-2. **outline** - Get file structure with filtering
-   - Supports hierarchical queries: `Animation.get*` (getters in Animation class)
-   - Use `depth: 1` to list only top-level symbols
-
-3. **diagnostics** - Get compilation errors and warnings
+2. **diagnostics** - Get compilation errors and warnings
    - Can be scoped to specific files or entire workspace
 
-4. **references** - Find all usages of a symbol
-   - Requires file path and line number
+3. **references** - Find all usages of a symbol
+   - Requires finding the symbol first with symbols query
+   - Then use the file path and line number
+
+4. **definition** - Jump to where a symbol is defined
+   - Go from usage to declaration
+   - Returns location with preview and symbol kind
 
 Examples:
 ```json
-{"type": "findSymbols", "query": "*Service", "kind": "class"}
-{"type": "outline", "path": "/path/to/file.java", "symbol": "Animation.*"}
+{"type": "symbols", "query": "*Service", "kinds": ["class"], "depth": 1}
+{"type": "symbols", "query": "Animation.get*", "kinds": ["method"]}
+{"type": "symbols", "kinds": ["class"], "exclude": ["**/test/**"], "countOnly": true}
+{"type": "definition", "path": "/src/app.ts", "line": 42}
 {"type": "references", "path": "/path/to/file.ts", "line": 42}
 ```
 

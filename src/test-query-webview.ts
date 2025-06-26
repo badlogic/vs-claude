@@ -163,6 +163,25 @@ export class TestQueryWebviewProvider {
         .error {
             color: var(--vscode-testing-iconFailed);
         }
+        .tag-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .kind-tag {
+            display: inline-block;
+            padding: 4px 8px;
+            background-color: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
+            border-radius: 3px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .kind-tag.selected {
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+        }
     </style>
 </head>
 <body>
@@ -172,85 +191,74 @@ export class TestQueryWebviewProvider {
     <div style="margin-bottom: 20px; padding: 15px; background-color: var(--vscode-textBlockQuote-background); border-radius: 4px;">
         <h3 style="margin-top: 0;">Quick Examples to Try:</h3>
         <ul style="margin: 0; padding-left: 20px;">
-            <li><strong>Find all classes:</strong> findSymbols query="*" kind="class"</li>
-            <li><strong>Find getters in a specific class:</strong> outline path="/your/file.java" symbol="Animation.get*"</li>
-            <li><strong>Get only class members:</strong> outline path="/your/file.java" symbol="Animation.*"</li>
-            <li><strong>Find test classes:</strong> findSymbols query="*Test" kind="class"</li>
-            <li><strong>Find getters and setters:</strong> findSymbols query="{get,set}*" kind="method"</li>
-            <li><strong>List only top-level types:</strong> outline path="/your/file.dart" depth="1"</li>
-            <li><strong>Find references:</strong> Use line number from findSymbols result</li>
+            <li><strong>All symbols in workspace:</strong> symbols (no parameters)</li>
+            <li><strong>Find all classes:</strong> symbols query="*" kinds=["class"]</li>
+            <li><strong>Find getters in a specific class:</strong> symbols query="Animation.get*"</li>
+            <li><strong>Get file structure:</strong> symbols path="/your/file.ts"</li>
+            <li><strong>Find test classes:</strong> symbols query="*Test" kinds=["class"]</li>
+            <li><strong>Find getters and setters:</strong> symbols query="{get,set}*" kinds=["method"]</li>
+            <li><strong>List only top-level types:</strong> symbols path="/your/file.ts" depth=1</li>
+            <li><strong>Find services in folder:</strong> symbols path="/src" query="*Service"</li>
         </ul>
     </div>
 
-    <!-- Find Symbols -->
-    <div class="query-section" id="findSymbols-section">
-        <div class="query-header" onclick="toggleSection('findSymbols')">
-            <h2>1. Find Symbols</h2>
+    <!-- Symbols -->
+    <div class="query-section" id="symbols-section">
+        <div class="query-header" onclick="toggleSection('symbols')">
+            <h2>1. Symbols (Unified Search)</h2>
             <span class="collapse-icon">▼</span>
         </div>
         <div class="query-content">
             <div class="input-group">
-                <label for="findSymbols-query">Query (supports glob patterns):</label>
-                <input type="text" id="findSymbols-query" value="handle*" />
+                <label for="symbols-query">Query (optional - supports glob patterns and hierarchical queries):</label>
+                <input type="text" id="symbols-query" placeholder="* or get* or Animation.get*" />
                 <small style="display: block; margin-top: 4px; color: var(--vscode-descriptionForeground);">
-                    Patterns: * (any), ? (one char), [abc] (any of), {get,set}* (alternatives), *Test (suffix)
+                    Patterns: * (any), ? (one char), [abc] (any of), {get,set}* (alternatives)<br>
+                    Hierarchical: Animation.get* (getters in Animation), *.toString (toString in any class)
                 </small>
             </div>
             <div class="input-group">
-                <label for="findSymbols-path">Path (optional - if provided, searches only in this file):</label>
-                <input type="text" id="findSymbols-path" placeholder="/path/to/file.ts" />
-            </div>
-            <div class="input-group">
-                <label for="findSymbols-kind">Kind (optional - filter by symbol type):</label>
-                <input type="text" id="findSymbols-kind" placeholder="class,interface" />
+                <label for="symbols-path">Path (optional - file or folder path):</label>
+                <input type="text" id="symbols-path" placeholder="/path/to/file.ts or /path/to/folder" />
                 <small style="display: block; margin-top: 4px; color: var(--vscode-descriptionForeground);">
-                    Available: module, namespace, package, class, method, property, field, constructor,
-                    enum, interface, function, variable, constant, string, null, enummember, struct, operator,
-                    or use "type" for all type-like symbols (class,interface,struct,enum)
-                </small>
-            </div>
-            <button onclick="runFindSymbols()">Run Find Symbols</button>
-            <button onclick="clearResult('findSymbols')">Clear</button>
-            <div id="findSymbols-result" class="result"></div>
-        </div>
-    </div>
-
-    <!-- File Outline -->
-    <div class="query-section" id="outline-section">
-        <div class="query-header" onclick="toggleSection('outline')">
-            <h2>2. Get File Outline</h2>
-            <span class="collapse-icon">▼</span>
-        </div>
-        <div class="query-content">
-            <div class="input-group">
-                <label for="outline-path">File Path:</label>
-                <input type="text" id="outline-path" placeholder="/path/to/file.ts" />
-            </div>
-            <div class="input-group">
-                <label for="outline-symbol">Symbol (optional - supports wildcards and dot notation):</label>
-                <input type="text" id="outline-symbol" placeholder="ClassName or Animation.get*" />
-                <small style="display: block; margin-top: 4px; color: var(--vscode-descriptionForeground);">
-                    Examples: "MyClass" (show class), "MyClass.*" (only members), "MyClass.get*" (getters in MyClass),<br>
-                    "get*" (all getters), "*Test" (test classes), "[A-Z]*" (uppercase start), "{get,set}*" (getters/setters)
+                    Leave empty for workspace search, provide file path for file structure, or folder path to limit search
                 </small>
             </div>
             <div class="input-group">
-                <label for="outline-kind">Kind (optional - filter by symbol type):</label>
-                <input type="text" id="outline-kind" placeholder="method,property" />
-                <small style="display: block; margin-top: 4px; color: var(--vscode-descriptionForeground);">
-                    Same kinds as findSymbols. Combine with symbol for powerful filtering, e.g., symbol="get*" kind="method"
-                </small>
+                <label for="symbols-kinds">Kinds (optional - select symbol types to filter):</label>
+                <div class="tag-list" id="symbols-kinds-tags">
+                    <span class="kind-tag" data-kind="module">module</span>
+                    <span class="kind-tag" data-kind="namespace">namespace</span>
+                    <span class="kind-tag" data-kind="package">package</span>
+                    <span class="kind-tag" data-kind="class">class</span>
+                    <span class="kind-tag" data-kind="method">method</span>
+                    <span class="kind-tag" data-kind="property">property</span>
+                    <span class="kind-tag" data-kind="field">field</span>
+                    <span class="kind-tag" data-kind="constructor">constructor</span>
+                    <span class="kind-tag" data-kind="enum">enum</span>
+                    <span class="kind-tag" data-kind="interface">interface</span>
+                    <span class="kind-tag" data-kind="function">function</span>
+                    <span class="kind-tag" data-kind="variable">variable</span>
+                    <span class="kind-tag" data-kind="constant">constant</span>
+                    <span class="kind-tag" data-kind="struct">struct</span>
+                    <span class="kind-tag" data-kind="type">type</span>
+                </div>
+                <input type="hidden" id="symbols-kinds" />
             </div>
-            <button onclick="runFileOutline()">Get File Outline</button>
-            <button onclick="clearResult('outline')">Clear</button>
-            <div id="outline-result" class="result"></div>
+            <div class="input-group">
+                <label for="symbols-depth">Depth (optional - limit tree depth):</label>
+                <input type="text" id="symbols-depth" placeholder="1 for top-level only" />
+            </div>
+            <button onclick="runSymbols()">Search Symbols</button>
+            <button onclick="clearResult('symbols')">Clear</button>
+            <div id="symbols-result" class="result"></div>
         </div>
     </div>
 
     <!-- Diagnostics -->
     <div class="query-section" id="diagnostics-section">
         <div class="query-header" onclick="toggleSection('diagnostics')">
-            <h2>3. Get Diagnostics</h2>
+            <h2>2. Get Diagnostics</h2>
             <span class="collapse-icon">▼</span>
         </div>
         <div class="query-content">
@@ -267,7 +275,7 @@ export class TestQueryWebviewProvider {
     <!-- Find References -->
     <div class="query-section" id="references-section">
         <div class="query-header" onclick="toggleSection('references')">
-            <h2>4. Find References</h2>
+            <h2>3. Find References</h2>
             <span class="collapse-icon">▼</span>
         </div>
         <div class="query-content">
@@ -283,7 +291,7 @@ export class TestQueryWebviewProvider {
                 <label for="references-character">Character Position (optional, 1-based):</label>
                 <input type="text" id="references-character" placeholder="15" />
                 <small style="display: block; margin-top: 4px; color: var(--vscode-descriptionForeground);">
-                    Tip: Use findSymbols first to locate a symbol, then use the line number from the result
+                    Tip: Use symbols search first to locate a symbol, then use the line number from the result
                 </small>
             </div>
             <button onclick="runReferences()">Find References</button>
@@ -295,6 +303,22 @@ export class TestQueryWebviewProvider {
     <script>
         const vscode = acquireVsCodeApi();
         let currentQueryType = null;
+        let selectedKinds = [];
+
+        // Initialize kind tag selection
+        document.querySelectorAll('.kind-tag').forEach(tag => {
+            tag.addEventListener('click', () => {
+                const kind = tag.getAttribute('data-kind');
+                if (tag.classList.contains('selected')) {
+                    tag.classList.remove('selected');
+                    selectedKinds = selectedKinds.filter(k => k !== kind);
+                } else {
+                    tag.classList.add('selected');
+                    selectedKinds.push(kind);
+                }
+                document.getElementById('symbols-kinds').value = selectedKinds.join(',');
+            });
+        });
 
         function toggleSection(sectionId) {
             const section = document.getElementById(sectionId + '-section');
@@ -307,49 +331,29 @@ export class TestQueryWebviewProvider {
             resultDiv.classList.remove('visible', 'success', 'error');
         }
 
-        function runFindSymbols() {
-            const query = document.getElementById('findSymbols-query').value;
-            const path = document.getElementById('findSymbols-path').value;
-            const kind = document.getElementById('findSymbols-kind').value;
+        function runSymbols() {
+            const query = document.getElementById('symbols-query').value;
+            const path = document.getElementById('symbols-path').value;
+            const depth = document.getElementById('symbols-depth').value;
 
             const request = {
-                type: 'findSymbols',
-                query: query
+                type: 'symbols'
             };
 
+            if (query) {
+                request.query = query;
+            }
             if (path) {
                 request.path = path;
             }
-            if (kind) {
-                request.kind = kind;
+            if (selectedKinds.length > 0) {
+                request.kinds = selectedKinds;
+            }
+            if (depth) {
+                request.depth = parseInt(depth, 10);
             }
 
-            runQuery(request, 'findSymbols');
-        }
-
-        function runFileOutline() {
-            const path = document.getElementById('outline-path').value;
-            const symbol = document.getElementById('outline-symbol').value;
-            const kind = document.getElementById('outline-kind').value;
-
-            if (!path) {
-                showError('Path is required for file outline', 'outline');
-                return;
-            }
-
-            const request = {
-                type: 'outline',
-                path: path
-            };
-
-            if (symbol) {
-                request.symbol = symbol;
-            }
-            if (kind) {
-                request.kind = kind;
-            }
-
-            runQuery(request, 'outline');
+            runQuery(request, 'symbols');
         }
 
         function runDiagnostics() {
@@ -387,7 +391,7 @@ export class TestQueryWebviewProvider {
             };
 
             if (character) {
-                request.character = parseInt(character, 10) - 1; // Convert to 0-based
+                request.character = parseInt(character, 10);
             }
 
             runQuery(request, 'references');
