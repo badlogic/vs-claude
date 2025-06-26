@@ -79,6 +79,30 @@ Returns: All locations where the symbol is referenced, with preview text
 
 Returns: Definition location(s) with preview, range, and symbol kind
 
+### 5. Supertype - Find Parent Types
+```json
+{
+  "type": "supertype",
+  "path": "/path/to/file.ts",  // Required: file containing the type
+  "line": 10,                  // Required: line number (1-based)
+  "character": 15              // Optional: column position (1-based)
+}
+```
+
+Returns: Parent types (extends/implements) with locations and preview
+
+### 6. Subtype - Find Derived Types
+```json
+{
+  "type": "subtype",
+  "path": "/path/to/file.ts",  // Required: file containing the type
+  "line": 3,                   // Required: line number (1-based)
+  "character": 20              // Optional: column position (1-based)
+}
+```
+
+Returns: Derived types (implementations/subclasses) with locations and preview
+
 ## Response Format
 
 Queries can be single or batched:
@@ -183,6 +207,28 @@ Always returns an array:
 }]
 ```
 
+### Type Hierarchy Response
+```json
+[{
+  "result": [
+    {
+      "name": "BaseRepository",
+      "kind": "Interface",
+      "path": "/src/base/Repository.ts:5:1",
+      "range": "5:1-10:2",
+      "preview": "export interface BaseRepository<T> {"
+    },
+    {
+      "name": "Persistable",
+      "kind": "Interface", 
+      "path": "/src/core/Persistable.ts:1:1",
+      "range": "1:1-3:2",
+      "preview": "interface Persistable {"
+    }
+  ]
+}]
+```
+
 ## Best Practices for LLMs
 
 ### 1. Workspace and Folder Searches - MUST Use depth or countOnly!
@@ -252,5 +298,6 @@ Depth parameter behavior:
 - **Diagnostics**: See errors without running build commands
 - **References**: Understand impact before making changes
 - **Definition**: Navigate from usage to declaration
+- **Supertype/Subtype**: Understand inheritance and implementation relationships
 - **Exclude/Count**: Handle large codebases efficiently
 - **Hierarchical**: Explore code structure naturally (Class → Methods → Details)

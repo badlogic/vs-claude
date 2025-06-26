@@ -53,7 +53,19 @@ interface DefinitionRequest {
 	character?: number; // Optional: character position in the line (1-based)
 }
 
-export type QueryRequest = SymbolsRequest | DiagnosticsRequest | ReferencesRequest | DefinitionRequest;
+interface TypeHierarchyRequest {
+	type: 'supertype' | 'subtype';
+	path: string; // Required: file containing the type
+	line: number; // Required: line number of the type (1-based)
+	character?: number; // Optional: character position in the line (1-based)
+}
+
+export type QueryRequest =
+	| SymbolsRequest
+	| DiagnosticsRequest
+	| ReferencesRequest
+	| DefinitionRequest
+	| TypeHierarchyRequest;
 
 // Response types for each query
 interface Symbol {
@@ -86,11 +98,19 @@ interface Definition {
 	kind?: string; // Symbol kind at definition
 }
 
+interface TypeHierarchyItem {
+	name: string;
+	kind: string;
+	path: string;
+	range: string;
+	preview: string;
+}
+
 interface CountResult {
 	count: number;
 }
 
-type Result = Symbol[] | Diagnostic[] | Reference[] | Definition[] | CountResult;
+type Result = Symbol[] | Diagnostic[] | Reference[] | Definition[] | TypeHierarchyItem[] | CountResult;
 
 // For batch queries, each element can be either results or an error
 export type QueryResponse = { result: Result } | { error: string };
@@ -129,6 +149,9 @@ export class QueryHandler {
 					return await this.getDiagnostics(request);
 				case 'definition':
 					return await this.findDefinition(request);
+				case 'supertype':
+				case 'subtype':
+					return await this.findTypeHierarchy(request);
 				default: {
 					const exhaustiveCheck: never = request;
 					return { error: `Unknown query type: ${(exhaustiveCheck as QueryRequest).type}` };
@@ -783,5 +806,72 @@ export class QueryHandler {
 		return kinds.length > 0
 			? kinds
 			: (Object.values(vscode.SymbolKind).filter((k) => typeof k === 'number') as vscode.SymbolKind[]);
+	}
+
+	private async findTypeHierarchy(
+		request: TypeHierarchyRequest
+	): Promise<{ result: TypeHierarchyItem[] } | { error: string }> {
+		try {
+			const uri = vscode.Uri.file(request.path);
+			const position = new vscode.Position(
+				request.line - 1, // Convert to 0-based
+				request.character ? request.character - 1 : 0
+			);
+
+			// Prepare type hierarchy at position
+			const typeHierarchyItems = await vscode.commands.executeCommand<vscode.TypeHierarchyItem[]>(
+				'vscode.prepareTypeHierarchy',
+				uri,
+				position
+			);
+
+			if (!typeHierarchyItems || typeHierarchyItems.length === 0) {
+				return { result: [] };
+			}
+
+			// Get supertypes or subtypes
+			const results: TypeHierarchyItem[] = [];
+
+			for (const item of typeHierarchyItems) {
+				const hierarchyItems = await vscode.commands.executeCommand<vscode.TypeHierarchyItem[]>(
+					request.type === 'supertype' ? 'vscode.provideSupertypes' : 'vscode.provideSubtypes',
+					item
+				);
+
+				if (hierarchyItems) {
+					for (const hierarchyItem of hierarchyItems) {
+						// Get document to extract preview
+						let preview = '';
+						try {
+							const doc = await vscode.workspace.openTextDocument(hierarchyItem.uri);
+							const line = doc.lineAt(hierarchyItem.range.start.line);
+							preview = line.text.trim();
+						} catch {
+							// Ignore preview errors
+						}
+
+						results.push({
+							name: hierarchyItem.name,
+							kind: vscode.SymbolKind[hierarchyItem.kind],
+							path: `${hierarchyItem.uri.fsPath}:${hierarchyItem.range.start.line + 1}:${
+								hierarchyItem.range.start.character + 1
+							}`,
+							range: this.formatRange(hierarchyItem.range),
+							preview,
+						});
+					}
+				}
+			}
+
+			return { result: results };
+		} catch (error) {
+			// Type hierarchy might not be supported by the language server
+			if (error instanceof Error) {
+				if (error.message.includes('No provider') || error.message.includes('not supported')) {
+					return { error: 'Type hierarchy not supported for this file type' };
+				}
+			}
+			return { error: `Failed to find type hierarchy: ${error}` };
+		}
 	}
 }

@@ -183,6 +183,30 @@ QUERY TYPES:
    {"type": "definition", "path": "/src/app.ts", "line": 25}  // find definition
    {"type": "definition", "path": "/src/app.ts", "line": 25, "character": 10}  // precise
 
+5. supertype - Find parent types (classes/interfaces this type extends/implements)
+   Required: path (string) - File containing the type
+   Required: line (number) - Line number, 1-based
+   Optional: character (number) - Column position, 1-based
+
+   Returns parent types with their locations and preview.
+   Useful for understanding inheritance chains.
+
+   Examples:
+   {"type": "supertype", "path": "/src/models/User.ts", "line": 10}  // find what User extends
+   {"type": "supertype", "path": "/src/services/Auth.ts", "line": 5, "character": 15}
+
+6. subtype - Find derived types (classes/interfaces that extend/implement this type)
+   Required: path (string) - File containing the type
+   Required: line (number) - Line number, 1-based
+   Optional: character (number) - Column position, 1-based
+
+   Returns derived types with their locations and preview.
+   Useful for finding all implementations of an interface or subclasses.
+
+   Examples:
+   {"type": "subtype", "path": "/src/interfaces/Repository.ts", "line": 3}  // find all implementations
+   {"type": "subtype", "path": "/src/models/BaseModel.ts", "line": 1}
+
 BEST PRACTICES:
 1. WORKSPACE SEARCHES: Must use depth OR countOnly (queries without these are rejected)
 2. DRILL DOWN: Use hierarchical queries (Class.*) for specific classes
@@ -215,6 +239,11 @@ Exploring production code only:
 Getting detailed type information:
 1. With types: {"type": "symbols", "path": "/src/utils.ts", "includeDetails": true}
 2. Shows function signatures and property types when available
+
+Understanding type hierarchies:
+1. Find parent types: {"type": "supertype", "path": "/src/models/User.ts", "line": 5}
+2. Find implementations: {"type": "subtype", "path": "/src/interfaces/Auth.ts", "line": 1}
+3. Navigate up and down inheritance chains
 
 LIMITATIONS:
 - Workspace queries without filters may exceed response limits
