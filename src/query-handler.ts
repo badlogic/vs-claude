@@ -596,16 +596,27 @@ export class QueryHandler {
 				);
 
 				if (filteredChildren.length > 0) {
-					// Has matching descendants: include this symbol as context with only the filtered children
-					const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
-					const sym: Symbol = {
-						name: symbol.name,
-						detail: symbol.detail,
-						kind: vscode.SymbolKind[symbol.kind],
-						location: this.formatRange(combinedRange),
-						children: filteredChildren,
-					};
-					result.push(sym);
+					// Check if this is a container type (namespace, module, package)
+					const isContainer =
+						symbol.kind === vscode.SymbolKind.Namespace ||
+						symbol.kind === vscode.SymbolKind.Module ||
+						symbol.kind === vscode.SymbolKind.Package;
+
+					if (isContainer) {
+						// For containers, promote matching children to top level
+						result.push(...filteredChildren);
+					} else {
+						// For other types, include this symbol as context with only the filtered children
+						const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
+						const sym: Symbol = {
+							name: symbol.name,
+							detail: symbol.detail,
+							kind: vscode.SymbolKind[symbol.kind],
+							location: this.formatRange(combinedRange),
+							children: filteredChildren,
+						};
+						result.push(sym);
+					}
 				}
 			}
 			// else: symbol doesn't match and has no matching descendants - exclude it
