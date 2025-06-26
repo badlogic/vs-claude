@@ -973,15 +973,21 @@ export class TestToolWebviewProvider {
             // Handle location clicks
             if (e.target.classList.contains('location-link')) {
                 const path = e.target.dataset.path;
-                const line = parseInt(e.target.dataset.line);
-                const column = parseInt(e.target.dataset.column);
+                const line = parseInt(e.target.dataset.line) || 0;
+                const column = parseInt(e.target.dataset.column) || 0;
                 
-                if (path && line && column) {
+                console.log('Location clicked:', { path, line, column });
+                
+                if (path && line > 0 && column > 0) {
                     // Auto-fill references/definition/hierarchy forms
                     ['references', 'definition', 'hierarchy'].forEach(type => {
-                        document.getElementById(\`\${type}-path\`).value = path;
-                        document.getElementById(\`\${type}-line\`).value = line;
-                        document.getElementById(\`\${type}-column\`).value = column;
+                        const pathInput = document.getElementById(\`\${type}-path\`);
+                        const lineInput = document.getElementById(\`\${type}-line\`);
+                        const columnInput = document.getElementById(\`\${type}-column\`);
+                        
+                        if (pathInput) pathInput.value = path;
+                        if (lineInput) lineInput.value = line;
+                        if (columnInput) columnInput.value = column;
                     });
                     
                     // Visual feedback for symbol locations
@@ -991,6 +997,8 @@ export class TestToolWebviewProvider {
                             e.target.style.textDecoration = '';
                         }, 200);
                     }
+                } else {
+                    console.error('Invalid location data:', { path, line, column });
                 }
             }
             // Handle kind toggle clicks

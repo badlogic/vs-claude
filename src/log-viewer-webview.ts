@@ -95,43 +95,58 @@ export class LogViewerWebviewProvider {
             font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
             font-size: 12px;
             width: 100%;
-            table-layout: fixed;
         }
 
         .log-row {
-            display: table-row;
-            white-space: nowrap;
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 2px;
+        }
+
+        .log-row.has-json {
+            flex-direction: column;
+        }
+
+        .log-main {
+            display: flex;
+            align-items: baseline;
+            width: 100%;
         }
 
         .log-cell {
-            display: table-cell;
             padding: 2px 8px 2px 0;
-            vertical-align: top;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .timestamp-cell {
-            width: 85px;
+            min-width: 85px;
+            flex-shrink: 0;
             color: var(--vscode-descriptionForeground);
             opacity: 0.7;
             font-size: 11px;
         }
 
         .level-cell {
-            width: 50px;
+            min-width: 50px;
+            flex-shrink: 0;
             text-align: center;
         }
 
         .component-cell {
-            width: 140px;
+            min-width: 140px;
+            flex-shrink: 0;
             color: var(--vscode-symbolIcon-namespaceForeground, #4EC9B0);
             font-weight: 500;
         }
 
         .message-cell {
-            width: auto;
+            flex: 1;
             padding-right: 0;
+        }
+
+        .log-json {
+            width: 100%;
+            margin-top: 4px;
         }
 
         .level {
@@ -347,14 +362,18 @@ export class LogViewerWebviewProvider {
                 }
             }
 
-            const messageWithArgs = formatMessage(log.message, log.level) + (argsHtml ? argsHtml : '');
+            const hasJsonArgs = argsHtml.length > 0;
+            const rowClass = hasJsonArgs ? 'log-row has-json' : 'log-row';
 
             return \`
-                <div class="log-row">
-                    <div class="log-cell timestamp-cell">\${formatTimestamp(log.timestamp)}</div>
-                    <div class="log-cell level-cell"><span class="level \${levelClass}">\${log.levelStr}</span></div>
-                    <div class="log-cell component-cell">\${log.component}</div>
-                    <div class="log-cell message-cell">\${messageWithArgs}</div>
+                <div class="\${rowClass}">
+                    <div class="log-main">
+                        <div class="log-cell timestamp-cell">\${formatTimestamp(log.timestamp)}</div>
+                        <div class="log-cell level-cell"><span class="level \${levelClass}">\${log.levelStr}</span></div>
+                        <div class="log-cell component-cell">\${log.component}</div>
+                        <div class="log-cell message-cell">\${formatMessage(log.message, log.level)}</div>
+                    </div>
+                    \${hasJsonArgs ? \`<div class="log-json">\${argsHtml}</div>\` : ''}
                 </div>
             \`;
         }
