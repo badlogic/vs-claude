@@ -153,6 +153,14 @@ QUERY TYPES:
    {"type": "diagnostics"}  // all workspace issues
    {"type": "diagnostics", "path": "/src/app.ts"}  // specific file
 
+7. fileTypes - Get all types and top-level functions in a file
+   Required: path
+
+   {"type": "fileTypes", "path": "/src/models/user.ts"}
+
+   Returns all classes, interfaces, structs, enums (including nested ones) and top-level functions.
+   Useful for understanding file structure and available types.
+
 RESPONSE: Always returns array of [{result: ...}] or [{error: ...}]
 For symbols: {name, kind, location, children?}
 

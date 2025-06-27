@@ -59,12 +59,18 @@ interface TypeHierarchyRequest {
 	column: number; // Required: column position in the line (1-based)
 }
 
+interface FileTypesRequest {
+	type: 'fileTypes';
+	path: string; // Required: file path to analyze
+}
+
 export type QueryRequest =
 	| SymbolsRequest
 	| DiagnosticsRequest
 	| ReferencesRequest
 	| DefinitionRequest
-	| TypeHierarchyRequest;
+	| TypeHierarchyRequest
+	| FileTypesRequest;
 
 // Response types for each query
 interface Symbol {
@@ -145,6 +151,8 @@ export class QueryHandler {
 				case 'supertype':
 				case 'subtype':
 					return await this.findTypeHierarchy(request);
+				case 'fileTypes':
+					return await this.getFileTypes(request);
 				default: {
 					const exhaustiveCheck: never = request;
 					return { error: `Unknown query type: ${(exhaustiveCheck as QueryRequest).type}` };
@@ -235,7 +243,7 @@ export class QueryHandler {
 			return { result: [] };
 		}
 
-		const filtered = this.filterSymbols(documentSymbols, query, kindFilter, '');
+		const filtered = this.filterSymbols(documentSymbols, query, kindFilter);
 		const filePath = uri.fsPath;
 		for (const symbol of filtered) {
 			symbol.location = `${filePath}:${symbol.location}`;
@@ -470,12 +478,7 @@ export class QueryHandler {
 		return matches && matchesKind;
 	}
 
-	private filterSymbols(
-		symbols: vscode.DocumentSymbol[],
-		query: string,
-		kindFilter?: SymbolKindName[],
-		parentPath: string = ''
-	): Symbol[] {
+	private filterSymbols(symbols: vscode.DocumentSymbol[], query: string, kindFilter?: SymbolKindName[]): Symbol[] {
 		const result: Symbol[] = [];
 
 		// Check if this is a hierarchical query (e.g., "Animation.get*")
@@ -484,8 +487,6 @@ export class QueryHandler {
 
 		for (const symbol of symbols) {
 			if (isHierarchicalQuery) {
-				// Build the full hierarchical path for this symbol
-				const fullPath = parentPath ? `${parentPath}.${symbol.name}` : symbol.name;
 				// For hierarchical queries like "Animation.get*" or "spine.Animation.get*"
 				const firstPart = queryParts[0];
 				const remainingQuery = queryParts.slice(1).join('.');
@@ -494,12 +495,7 @@ export class QueryHandler {
 				if (this.nameAndKindMatches(symbol.name, symbol.kind, firstPart)) {
 					// Symbol matches first part - consume it and continue with remaining query
 					if (remainingQuery && symbol.children && symbol.children.length > 0) {
-						const filteredChildren = this.filterSymbols(
-							symbol.children,
-							remainingQuery,
-							kindFilter,
-							fullPath
-						);
+						const filteredChildren = this.filterSymbols(symbol.children, remainingQuery, kindFilter);
 
 						if (filteredChildren.length > 0) {
 							// Include this symbol with filtered children
@@ -529,8 +525,7 @@ export class QueryHandler {
 					const filteredChildren = this.filterSymbols(
 						symbol.children,
 						query, // Keep full query
-						kindFilter,
-						fullPath
+						kindFilter
 					);
 
 					if (filteredChildren.length > 0) {
@@ -561,12 +556,7 @@ export class QueryHandler {
 					result.push(sym);
 				} else if (symbol.children && symbol.children.length > 0) {
 					// Symbol doesn't match: check if any descendants match
-					const filteredChildren = this.filterSymbols(
-						symbol.children,
-						query,
-						kindFilter,
-						parentPath ? `${parentPath}.${symbol.name}` : symbol.name
-					);
+					const filteredChildren = this.filterSymbols(symbol.children, query, kindFilter);
 
 					if (filteredChildren.length > 0) {
 						// Include this symbol with filtered children
@@ -597,16 +587,16 @@ export class QueryHandler {
 
 	private async findDefinition(request: DefinitionRequest): Promise<{ result: Definition[] } | { error: string }> {
 		try {
-			const uri = vscode.Uri.file(request.path);
+			const requestUri = vscode.Uri.file(request.path);
 			const position = new vscode.Position(
 				request.line - 1, // Convert to 0-based
 				request.column - 1
 			);
 
 			// Find definition at this position
-			const definitions = await vscode.commands.executeCommand<vscode.Location | vscode.Location[]>(
+			const definitions = await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>(
 				'vscode.executeDefinitionProvider',
-				uri,
+				requestUri,
 				position
 			);
 
@@ -620,27 +610,34 @@ export class QueryHandler {
 			// Convert to our format
 			const results = await Promise.all(
 				definitionArray.map(async (def) => {
-					const document = await vscode.workspace.openTextDocument(def.uri);
-					const line = document.lineAt(def.range.start.line);
+					// Check if it's a LocationLink or Location
+					const isLocationLink = 'targetUri' in def;
+					const uri = isLocationLink ? (def as vscode.LocationLink).targetUri : (def as vscode.Location).uri;
+					const range = isLocationLink
+						? (def as vscode.LocationLink).targetRange
+						: (def as vscode.Location).range;
+
+					const document = await vscode.workspace.openTextDocument(uri);
+					const line = document.lineAt(range.start.line);
 
 					// Try to get symbol information at the definition location
 					const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
 						'vscode.executeDocumentSymbolProvider',
-						def.uri
+						uri
 					);
 
 					let symbolKind: string | undefined;
 					if (symbols) {
 						// Find the symbol at this location
-						const symbol = this.findSymbolAtPosition(symbols, def.range.start);
+						const symbol = this.findSymbolAtPosition(symbols, range.start);
 						if (symbol) {
 							symbolKind = vscode.SymbolKind[symbol.kind];
 						}
 					}
 
 					return {
-						path: `${def.uri.fsPath}:${def.range.start.line + 1}:${def.range.start.character + 1}`,
-						range: this.formatRange(def.range),
+						path: `${uri.fsPath}:${range.start.line + 1}:${range.start.character + 1}`,
+						range: this.formatRange(range),
 						preview: line.text.trim(),
 						kind: symbolKind,
 					};
@@ -651,7 +648,9 @@ export class QueryHandler {
 			return { result: results };
 		} catch (error) {
 			logger.error('QueryHandler', `Failed to find definition: ${error}`);
-			return { error: `Failed to find definition: ${error}` };
+			return {
+				error: `Failed to find definition: ${error}, stack: ${error instanceof Error ? error.stack : 'unknown'}`,
+			};
 		}
 	}
 
@@ -826,6 +825,68 @@ export class QueryHandler {
 				}
 			}
 			return { error: `Failed to find type hierarchy: ${error}` };
+		}
+	}
+
+	private async getFileTypes(request: FileTypesRequest): Promise<{ result: Symbol[] } | { error: string }> {
+		try {
+			const uri = vscode.Uri.file(request.path);
+
+			// Get all symbols in the file
+			const documentSymbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+				'vscode.executeDocumentSymbolProvider',
+				uri
+			);
+
+			if (!documentSymbols) {
+				logger.debug('QueryHandler', `No symbol provider available for ${uri.fsPath}`);
+				return { result: [] };
+			}
+
+			const results: Symbol[] = [];
+
+			// Extract all types (classes, interfaces, structs, enums) and top-level functions
+			const extractTypesAndFunctions = (symbols: vscode.DocumentSymbol[], isTopLevel = true) => {
+				for (const symbol of symbols) {
+					const isType = [
+						vscode.SymbolKind.Class,
+						vscode.SymbolKind.Interface,
+						vscode.SymbolKind.Struct,
+						vscode.SymbolKind.Enum,
+					].includes(symbol.kind);
+
+					const isTopLevelFunction = isTopLevel && symbol.kind === vscode.SymbolKind.Function;
+
+					if (isType || isTopLevelFunction) {
+						const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
+						const sym: Symbol = {
+							name: symbol.name,
+							kind: vscode.SymbolKind[symbol.kind],
+							location: `${request.path}:${this.formatRange(combinedRange)}`,
+						};
+
+						// For types, include their members
+						if (isType && symbol.children && symbol.children.length > 0) {
+							sym.children = this.filterSymbols(symbol.children, '*', []);
+						}
+
+						results.push(sym);
+					}
+
+					// Recursively check for nested types
+					if (symbol.children && symbol.children.length > 0) {
+						extractTypesAndFunctions(symbol.children, false);
+					}
+				}
+			};
+
+			extractTypesAndFunctions(documentSymbols);
+
+			logger.info('QueryHandler', `Found ${results.length} types and functions in ${request.path}`);
+			return { result: results };
+		} catch (error) {
+			logger.error('QueryHandler', `Failed to get file types: ${error}`);
+			return { error: `Failed to get file types: ${error}` };
 		}
 	}
 }

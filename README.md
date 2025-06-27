@@ -10,12 +10,25 @@ VS Claude provides two tools for AI assistants:
    - Find symbols (classes, methods, functions, variables, etc.) with hierarchical queries
    - Get references, definitions, and diagnostics
    - Explore type hierarchies (supertypes/subtypes)
+   - Get all types and top-level functions in a file
    - See [`mcp/main.go`](mcp/main.go) for the full tool description
 
 2. **open** - File navigation and diff viewing
    - Open files with line highlighting
    - Show git diffs and file comparisons
    - See [`mcp/main.go`](mcp/main.go) for the full tool description
+
+### Query Types
+
+The query tool supports these query types:
+
+1. **symbols** - Find code elements by pattern with support for wildcards and hierarchical queries
+2. **references** - Find all usages of a symbol at a specific location
+3. **definition** - Get the definition location of a symbol
+4. **supertype** - Find what a type extends/implements
+5. **subtype** - Find implementations/subclasses of a type
+6. **diagnostics** - Get errors and warnings from the language server
+7. **fileTypes** - Get all types (classes, interfaces, structs, enums) and top-level functions in a file
 
 ## Installation
 

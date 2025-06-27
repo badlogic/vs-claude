@@ -44,10 +44,11 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
-    "build": "tsc -p ./ && ./scripts/build-binaries.sh",
-    "build:debug": "tsc -p ./ && cd mcp && go build -o ../bin/mcp-server-$(go env GOOS)-$(go env GOARCH)$(go env GOEXE) . && cd ..",
+    "build": "tsc -p ./ && npm run copy-webview-assets && ./scripts/build-binaries.sh",
+    "build:debug": "tsc -p ./ && npm run copy-webview-assets && cd mcp && go build -o ../bin/mcp-server-$(go env GOOS)-$(go env GOARCH)$(go env GOEXE) . && cd ..",
+    "copy-webview-assets": "cp src/*.content.html out/ && cp src/*.content.js out/",
     "check": "biome check --write ./src && cd mcp && go fmt ./... && cd .. && tsc --noEmit",
-    "test": "rm -rf out && tsc -p ./ && cd mcp && go build -o ../bin/mcp-server-$(go env GOOS)-$(go env GOARCH)$(go env GOEXE) . && cd .. && tsc -p ./tsconfig.test.json && cp -r test/test-workspace out/test/ && node test/setup-test-workspace.js && node ./out/test/runTest.js",
+    "test": "rm -rf out && tsc -p ./ && npm run copy-webview-assets && cd mcp && go build -o ../bin/mcp-server-$(go env GOOS)-$(go env GOARCH)$(go env GOEXE) . && cd .. && tsc -p ./tsconfig.test.json && cp -r test/test-workspace out/test/ && node test/setup-test-workspace.js && node ./out/test/runTest.js",
     "clean": "rm -rf out/ bin/",
     "prepare": "husky"
   },
