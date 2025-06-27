@@ -90,109 +90,85 @@ Notes:
 	// Register query tool
 	mcpServer.AddTool(
 		mcp.NewTool("query",
-			mcp.WithDescription(`Query VS Code's language intelligence for semantic code understanding.
+			mcp.WithDescription(`Semantic code search using VS Code's language intelligence. Unlike grep, understands code structure, relationships, and meaning. USE THIS INSTEAD OF GREP/RIPGREP.
 
-WHEN TO USE: Choose this over grep/ripgrep when you need to:
-- Find where code elements are defined (classes, functions, methods, types)
-- Explore code structure and relationships
-- Find all usages of a symbol
-- Navigate to definitions
-- Understand type hierarchies
-- Get file overview: Use fileTypes to see ALL types & top-level functions at once
+QUICK START:
+1. Find symbols: {"type": "symbols", "query": "UserService"}
+2. Get location from result (e.g., "/src/user.ts:15:7")
+3. Use location for other queries: {"type": "references", "path": "/src/user.ts", "line": 15, "column": 7}
 
-KEY CONCEPT - Hierarchical Query Syntax:
-Use dots (.) for hierarchy, NOT language-specific delimiters (:: or ->).
-The number of dots controls result depth - each dot means "show me the children":
-- "Animation" → just Animation symbol (no children)
-- "Animation.*" → Animation + its direct children
-- "Animation.get*" → Animation + children starting with "get"
-- "Skeleton.{get,set}*" → Skeleton + getters/setters (NOT "Skeleton::get*")
+Single query: {"type": "symbols", "query": "handle*"}
+Batch queries: [{"type": "symbols", "query": "handle*"}, {"type": "diagnostics"}]
 
-The 'kinds' filter applies to what matches your pattern, not the entire tree.
+LOCATION FORMAT:
+Top-level: "path:line:col-line:col" → "/src/user.ts:15:7-15:18"
+Children: "line:col-line:col" → "20:3-20:9"
+Extract path, line, column for references/definition/supertype/subtype queries.
 
 QUERY TYPES:
 
-1. symbols - Find code elements and explore structure
-   Parameters:
-   - query: Pattern to match (default: "*"). Supports wildcards and hierarchy
-   - path: File or folder to search in (default: workspace)
-   - kinds: Filter leaf nodes matching query by symbol type ["class", "method", "property", "field", "constructor", "enum", "interface", "function", "variable", "constant", "enummember", "struct", "operator", "type"]
-   - exclude: Glob path patterns to exclude ["**/test/**", "**/*.spec.ts"]
-   - countOnly: Return count of matched leaf nodes only
+1. symbols - Find code elements (most common query)
+   - query?: pattern to match (default "*"). Use . for hierarchy, not :: or ->
+     "Class" → just Class | "Class.*" → Class + direct children | "Class.method" → specific method
+   - path?: file or folder to search (absolute path)
+   - kinds?: filter ["class","method","property","field","constructor","enum","interface","function","variable","constant","struct","operator","type"]
+     "type" = meta-kind matching class/interface/struct/enum
+   - exclude?: glob patterns to skip ["**/test/**"]
+   - countOnly?: return count only (faster for broad queries)
 
-   Most useful patterns:
-   {"type": "symbols", "query": "UserService"}  // find UserService class/interface
-   {"type": "symbols", "query": "UserService.*"}  // UserService with all members
-   {"type": "symbols", "query": "UserService.*", "kinds": ["method"]}  // just methods
-   {"type": "symbols", "query": "*.get*", "kinds": ["method"]}  // all getter methods
-   {"type": "symbols", "query": "*", "kinds": ["class"]}  // all top-level classes
-   {"type": "symbols", "path": "/src/user.ts"}  // explore entire file
-   {"type": "symbols", "path": "/src", "query": "*Service"}  // all services in folder
-   {"type": "symbols", "query": "*Test", "kinds": ["class"], "countOnly": true}  // count test classes
+   Example: {"type": "symbols", "query": "UserService.*", "kinds": ["method"]}
+   → [{"result": [{"name": "UserService", "kind": "Class", "location": "/src/user.ts:15:7-15:18",
+                   "children": [{"name": "create", "kind": "Method", "location": "20:3-20:9"}]}]}]
 
 2. references - Find all usages of a symbol
-   Required: path, line, column (from symbols query)
+   Requires: path, line, column (from symbols query)
+   {"type": "references", "path": "/src/user.ts", "line": 42, "column": 8}
+   → [{"result": [{"path": "/src/api/handler.ts:25:10", "preview": "  const result = processUser(data);"}]}]
 
-   Workflow:
-   1. {"type": "symbols", "query": "processUser"}  // find it first
-   2. {"type": "references", "path": "/src/user.ts", "line": 42, "column": 8}  // find usages
-
-3. definition - Get the location of the definition of the symbol, e.g. function in header -> implementation in .cpp file.
-   Required: path, line, column
-
-   {"type": "definition", "path": "/src/app.ts", "line": 25, "column": 12}
-
-4. supertype - Find what a type extends/implements
-   Required: path, line, column
-
-   {"type": "supertype", "path": "/src/models/User.ts", "line": 5, "column": 14}
-
-5. subtype - Find implementations/subclasses
-   Required: path, line, column
-
-   {"type": "subtype", "path": "/src/base/Repository.ts", "line": 1, "column": 7}
-
-6. diagnostics - Get errors and warnings
-   {"type": "diagnostics"}  // all workspace issues
-   {"type": "diagnostics", "path": "/src/app.ts"}  // specific file
-
-7. fileTypes - Get all types and top-level functions in a file
-   BEST FOR FILE OVERVIEW - Shows complete type structure at a glance!
-   Required: path
-
+3. fileTypes - Get all types and top-level functions in a file (file overview)
+   Requires: path
    {"type": "fileTypes", "path": "/src/models/user.ts"}
+   → [{"result": [{"name": "User", "kind": "Class", "location": "/src/models/user.ts:15:7-15:11"},
+                  {"name": "createUser", "kind": "Function", "location": "/src/models/user.ts:45:10-45:20"}]}]
 
-   Returns ALL classes, interfaces, structs, enums (including nested) + top-level functions.
-   Perfect for understanding what's in a file without multiple queries.
+4. diagnostics - Get errors/warnings
+   - path?: specific file (omit for workspace)
+   {"type": "diagnostics", "path": "/src/app.ts"}
+   → [{"result": [{"path": "/src/app.ts:10:5", "severity": "error", "message": "Cannot find name 'foo'.", "source": "ts"}]}]
 
-RESPONSE: Always returns array of [{result: ...}] or [{error: ...}]
-For symbols: {name, kind, location, children?}
+5. definition - Jump to definition
+   Requires: path, line, column
+   {"type": "definition", "path": "/src/app.ts", "line": 25, "column": 12}
+   → [{"result": [{"path": "/src/models/user.ts:42:8", "range": "42:8-42:18", "preview": "export function processUser(data: UserData) {"}]}]
 
-COMMON PATTERNS:
+6. supertype - Find what a type extends/implements
+   Requires: path, line, column
+   {"type": "supertype", "path": "/src/models/User.ts", "line": 5, "column": 14}
+   → [{"result": [{"name": "BaseEntity", "kind": "Class", "path": "/src/models/base.ts:10:7", "range": "10:7-10:17"}]}]
 
-Explore a class:
-{"type": "symbols", "query": "UserService.*"}  // see all members
-{"type": "symbols", "query": "UserService.{get,set}*", "kinds": ["method"]}  // getters/setters
+7. subtype - Find implementations/subclasses
+   Requires: path, line, column
+   {"type": "subtype", "path": "/src/base/Repository.ts", "line": 1, "column": 7}
+   → [{"result": [{"name": "UserRepository", "kind": "Class", "path": "/src/repos/user.ts:5:7", "range": "5:7-5:21"}]}]
 
-Find implementations:
-{"type": "symbols", "query": "Repository", "kinds": ["interface"]}  // find interface
-{"type": "subtype", "path": "/result/path", "line": 5}  // find implementations
+COMMON WORKFLOWS:
+- File overview: fileTypes → see all types/functions
+- Find & refactor: symbols → references → make changes
+- Debug errors: diagnostics → definition → fix issues
+- Explore hierarchy: symbols → supertype/subtype
 
-Check before refactoring:
-{"type": "symbols", "query": "oldMethodName"}  // find it
-{"type": "references", "path": "/path", "line": 42}  // check usage
-
-File overview:
-{"type": "fileTypes", "path": "/src/controller.ts"}  // BEST: all types + functions at once
-{"type": "symbols", "path": "/src/controller.ts", "query": "*"}  // alternative: top-level only
-{"type": "symbols", "path": "/src/controller.ts", "query": "*.*"}  // alternative: with members
+LIMITATIONS:
+- Requires VS Code language extensions (e.g., Python, Go, C#)
+- Results depend on language server capabilities
+- Cannot search in comments/strings (use grep instead)
+- Line/column must be exact for references/definition queries
+- Paths must be absolute
 
 TIPS:
-- Always use hierarchical queries for depth control
-- Add 'kinds' to filter results
-- Use 'exclude' to skip test files
-- Try 'countOnly' first for broad queries
-- Paths must be absolute`),
+- Use countOnly for broad queries first
+- Batch queries run in parallel
+- Hierarchical queries include parent when children match
+- Be precise with symbol queries.`),
 			mcp.WithObject("args",
 				mcp.Description("Single query object or array of query objects"),
 			),
