@@ -1,68 +1,22 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import * as vscode from 'vscode';
-import { logger } from '../logger';
+import './components/log-viewer';
+import { initializeTheme } from './webview-base';
 
-export class LogViewerWebviewProvider {
-	private panel: vscode.WebviewPanel | undefined;
+// Initialize theme handling
+initializeTheme();
 
-	constructor(private context: vscode.ExtensionContext) {}
+// Mount the log viewer component
+const logViewer = document.createElement('log-viewer');
+document.body.appendChild(logViewer);
 
-	public show() {
-		if (this.panel) {
-			this.panel.reveal();
-			return;
-		}
-
-		this.panel = vscode.window.createWebviewPanel('vsClaudeLogViewer', 'VS Claude Logs', vscode.ViewColumn.Two, {
-			enableScripts: true,
-			retainContextWhenHidden: true,
-			localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, '')],
-		});
-
-		// Set the icon
-		this.panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'logo.png');
-
-		this.panel.webview.html = this.getWebviewContent(this.panel.webview);
-
-		// Send current logs
-		this.panel.webview.postMessage({
-			command: 'setLogs',
-			logs: logger.getLogs(),
-		});
-
-		// Listen for new logs
-		const logListener = logger.onDidLog((log) => {
-			this.panel?.webview.postMessage({
-				command: 'addLog',
-				log,
-			});
-		});
-
-		this.panel.onDidDispose(
-			() => {
-				logListener.dispose();
-				this.panel = undefined;
-			},
-			null,
-			this.context.subscriptions
-		);
+// Handle messages from the extension
+window.addEventListener('message', (event) => {
+	const message = event.data;
+	switch (message.command) {
+		case 'setLogs':
+			logViewer.entries = message.logs;
+			break;
+		case 'addLog':
+			logViewer.entries = [...logViewer.entries, message.log];
+			break;
 	}
-
-	private getWebviewContent(webview: vscode.Webview): string {
-		const logoUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'logo.png'));
-		const scriptUri = webview.asWebviewUri(
-			vscode.Uri.joinPath(this.context.extensionUri, 'out', 'views', 'log-viewer-webview.content.js')
-		);
-
-		// Read the HTML template
-		const htmlPath = path.join(this.context.extensionPath, 'out', 'views', 'log-viewer-webview.content.html');
-		let html = fs.readFileSync(htmlPath, 'utf8');
-
-		// Replace template variables
-		html = html.replace(/\${logoUri}/g, logoUri.toString());
-		html = html.replace(/\${scriptUri}/g, scriptUri.toString());
-
-		return html;
-	}
-}
+});

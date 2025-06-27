@@ -233,6 +233,11 @@ mcp_vs-claude_query({
 })
 ```
 
+### Known Limitations
+
+#### Java Type Hierarchy
+The Java Language Server (used by the Red Hat Java extension) does not support the standard VS Code type hierarchy API. As a result, the `supertype` and `subtype` tools will not work with Java files. The Java extension implements its own custom type hierarchy using proprietary workspace commands instead of the standard LSP 3.17 type hierarchy protocol.
+
 
 ## Contributing
 

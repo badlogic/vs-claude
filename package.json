@@ -38,22 +38,22 @@
       },
       {
         "command": "vs-claude.showLogs",
-        "title": "VS Claude: Show Logs (Colored)"
+        "title": "VS Claude: Show Logs"
       }
     ]
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
-    "build": "tsc -p ./ && npm run copy-webview-assets && ./scripts/build-binaries.sh",
-    "build:debug": "tsc -p ./ && npm run copy-webview-assets && cd mcp && go build -o ../bin/mcp-server-$(go env GOOS)-$(go env GOARCH)$(go env GOEXE) . && cd ..",
-    "copy-webview-assets": "cp src/views/*.content.html out/views/ && cp src/views/*.content.js out/views/",
+    "build": "tsc -p ./ && node scripts/build-webviews.js && ./scripts/build-binaries.sh",
+    "build:debug": "tsc -p ./ && node scripts/build-webviews.js && cd mcp && go build -o ../bin/mcp-server-$(go env GOOS)-$(go env GOARCH)$(go env GOEXE) . && cd ..",
     "check": "biome check --write ./src && cd mcp && go fmt ./... && cd .. && tsc --noEmit",
-    "test": "rm -rf out && tsc -p ./ && npm run copy-webview-assets && cd mcp && go build -o ../bin/mcp-server-$(go env GOOS)-$(go env GOARCH)$(go env GOEXE) . && cd .. && tsc -p ./tsconfig.test.json && cp -r test/test-workspace out/test/ && node test/setup-test-workspace.js && node ./out/test/runTest.js",
+    "test": "rm -rf out && npm run build && tsc -p ./tsconfig.test.json && cp -r test/test-workspace out/test/ && node test/setup-test-workspace.js && node ./out/test/runTest.js",
     "clean": "rm -rf out/ bin/",
     "prepare": "husky"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.5",
+    "@tailwindcss/forms": "^0.5.10",
     "@types/glob": "^8.1.0",
     "@types/minimatch": "^5.1.2",
     "@types/mocha": "^10.0.1",
@@ -61,13 +61,19 @@
     "@types/sinon": "^17.0.4",
     "@types/vscode": "^1.74.0",
     "@vscode/test-electron": "^2.3.0",
+    "autoprefixer": "^10.4.21",
     "chalk": "^4.1.2",
+    "concurrently": "^9.2.0",
+    "esbuild": "^0.25.5",
     "glob": "^8.1.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.1.2",
+    "lit": "^3.3.0",
     "minimatch": "^10.0.3",
     "mocha": "^10.2.0",
+    "postcss": "^8.5.6",
     "sinon": "^17.0.1",
+    "tailwindcss": "^3.4.17",
     "typescript": "^5.0.0"
   },
   "lint-staged": {

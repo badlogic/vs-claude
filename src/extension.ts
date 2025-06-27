@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
+import { LogViewerWebviewProvider } from './log-viewer-provider';
 import { logger } from './logger';
 import { SetupManager } from './setup';
-import { LogViewerWebviewProvider } from './views/log-viewer-webview';
-import { TestToolWebviewProvider } from './views/test-tool-webview';
+import { TestToolWebviewProvider } from './test-tool-provider';
 import { WindowManager } from './window-manager';
 
 let windowManager: WindowManager;
@@ -19,6 +19,17 @@ export async function activate(context: vscode.ExtensionContext) {
 	logViewerProvider = new LogViewerWebviewProvider(context);
 
 	await windowManager.initialize();
+
+	// Restore previously open panels in development mode
+	if (context.extensionMode === vscode.ExtensionMode.Development) {
+		const openPanels = context.globalState.get<string[]>('openPanels', []);
+		if (openPanels.includes('testTool')) {
+			testToolProvider.show();
+		}
+		if (openPanels.includes('logViewer')) {
+			logViewerProvider.show();
+		}
+	}
 
 	const showSetupCommand = vscode.commands.registerCommand('vs-claude.showSetup', async () => {
 		await setupManager.checkAndInstallMCP();
@@ -45,11 +56,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	await setupManager.checkAndInstallMCP();
 
 	logger.info('Extension', 'VS Claude extension ready');
-
-	// Show logs by default in development
-	if (context.extensionMode === vscode.ExtensionMode.Development) {
-		logger.show();
-	}
 
 	context.subscriptions.push({
 		dispose: () => {

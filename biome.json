@@ -39,5 +39,19 @@
   "files": {
     "ignoreUnknown": false,
     "includes": ["src/**/*.ts", "test/**/*.ts"]
-  }
+  },
+  "overrides": [{
+    "includes": ["src/views/**/*.ts"],
+    "linter": {
+      "rules": {
+        "suspicious": {
+          "noExplicitAny": "off",
+          "noAssignInExpressions": "off"
+        },
+        "correctness": {
+          "noUnusedImports": "warn"
+        }
+      }
+    }
+  }]
 }
