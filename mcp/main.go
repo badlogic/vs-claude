@@ -87,93 +87,158 @@ Notes:
 		handleOpen,
 	)
 
-	// Register query tool
+	// Register symbols tool
 	mcpServer.AddTool(
-		mcp.NewTool("query",
-			mcp.WithDescription(`Semantic code search using VS Code's language intelligence. Unlike grep, understands code structure, relationships, and meaning. USE THIS INSTEAD OF GREP/RIPGREP.
+		mcp.NewTool("symbols",
+			mcp.WithDescription(`Find code elements using VS Code's language intelligence. USE THIS INSTEAD OF GREP/RIPGREP for finding code.
 
-QUICK START:
-1. Find symbols: {"type": "symbols", "query": "UserService"}
-2. Get location from result (e.g., "/src/user.ts:15:7")
-3. Use location for other queries: {"type": "references", "path": "/src/user.ts", "line": 15, "column": 7}
+PARAMETERS:
+- query?: pattern to match (default "*"). Use . for hierarchy, not :: or ->
+  "Class" → just Class | "Class.*" → Class + direct children | "Class.method" → specific method
+- path?: file or folder to search (absolute path)
+- kinds?: filter ["class","method","property","field","constructor","enum","interface","function","variable","constant","struct","operator","type"]
+  "type" = meta-kind matching class/interface/struct/enum
+- exclude?: glob patterns to skip ["**/test/**"]
+- countOnly?: return count only (faster for broad queries)
 
-Single query: {"type": "symbols", "query": "handle*"}
-Batch queries: [{"type": "symbols", "query": "handle*"}, {"type": "diagnostics"}]
+EXAMPLES:
+Find class: {"query": "UserService"}
+→ [{"name": "UserService", "kind": "Class", "location": "/src/user.ts:15:7-15:18"}]
+
+Find methods: {"query": "UserService.*", "kinds": ["method"]}
+→ [{"name": "UserService", "kind": "Class", "location": "/src/user.ts:15:7-15:18",
+    "children": [{"name": "create", "kind": "Method", "location": "20:3-20:9"}]}]
+
+Count test classes: {"query": "*Test", "kinds": ["class"], "countOnly": true}
+→ {"count": 42}
 
 LOCATION FORMAT:
-Top-level: "path:line:col-line:col" → "/src/user.ts:15:7-15:18"
-Children: "line:col-line:col" → "20:3-20:9"
-Extract path, line, column for references/definition/supertype/subtype queries.
-
-QUERY TYPES:
-
-1. symbols - Find code elements (most common query)
-   - query?: pattern to match (default "*"). Use . for hierarchy, not :: or ->
-     "Class" → just Class | "Class.*" → Class + direct children | "Class.method" → specific method
-   - path?: file or folder to search (absolute path)
-   - kinds?: filter ["class","method","property","field","constructor","enum","interface","function","variable","constant","struct","operator","type"]
-     "type" = meta-kind matching class/interface/struct/enum
-   - exclude?: glob patterns to skip ["**/test/**"]
-   - countOnly?: return count only (faster for broad queries)
-
-   Example: {"type": "symbols", "query": "UserService.*", "kinds": ["method"]}
-   → [{"result": [{"name": "UserService", "kind": "Class", "location": "/src/user.ts:15:7-15:18",
-                   "children": [{"name": "create", "kind": "Method", "location": "20:3-20:9"}]}]}]
-
-2. references - Find all usages of a symbol
-   Requires: path, line, column (from symbols query)
-   {"type": "references", "path": "/src/user.ts", "line": 42, "column": 8}
-   → [{"result": [{"path": "/src/api/handler.ts:25:10", "preview": "  const result = processUser(data);"}]}]
-
-3. fileTypes - Get all types and top-level functions in a file (file overview)
-   Requires: path
-   {"type": "fileTypes", "path": "/src/models/user.ts"}
-   → [{"result": [{"name": "User", "kind": "Class", "location": "/src/models/user.ts:15:7-15:11"},
-                  {"name": "createUser", "kind": "Function", "location": "/src/models/user.ts:45:10-45:20"}]}]
-
-4. diagnostics - Get errors/warnings
-   - path?: specific file (omit for workspace)
-   {"type": "diagnostics", "path": "/src/app.ts"}
-   → [{"result": [{"path": "/src/app.ts:10:5", "severity": "error", "message": "Cannot find name 'foo'.", "source": "ts"}]}]
-
-5. definition - Jump to definition
-   Requires: path, line, column
-   {"type": "definition", "path": "/src/app.ts", "line": 25, "column": 12}
-   → [{"result": [{"path": "/src/models/user.ts:42:8", "range": "42:8-42:18", "preview": "export function processUser(data: UserData) {"}]}]
-
-6. supertype - Find what a type extends/implements
-   Requires: path, line, column
-   {"type": "supertype", "path": "/src/models/User.ts", "line": 5, "column": 14}
-   → [{"result": [{"name": "BaseEntity", "kind": "Class", "path": "/src/models/base.ts:10:7", "range": "10:7-10:17"}]}]
-
-7. subtype - Find implementations/subclasses
-   Requires: path, line, column
-   {"type": "subtype", "path": "/src/base/Repository.ts", "line": 1, "column": 7}
-   → [{"result": [{"name": "UserRepository", "kind": "Class", "path": "/src/repos/user.ts:5:7", "range": "5:7-5:21"}]}]
-
-COMMON WORKFLOWS:
-- File overview: fileTypes → see all types/functions
-- Find & refactor: symbols → references → make changes
-- Debug errors: diagnostics → definition → fix issues
-- Explore hierarchy: symbols → supertype/subtype
-
-LIMITATIONS:
-- Requires VS Code language extensions (e.g., Python, Go, C#)
-- Results depend on language server capabilities
-- Cannot search in comments/strings (use grep instead)
-- Line/column must be exact for references/definition queries
-- Paths must be absolute
-
-TIPS:
-- Use countOnly for broad queries first
-- Batch queries run in parallel
-- Hierarchical queries include parent when children match
-- Be precise with symbol queries.`),
+Top-level: "path:line:col-line:col"
+Children: "line:col-line:col" (relative to parent)
+Use these locations for references/definition/supertype/subtype tools.`),
 			mcp.WithObject("args",
-				mcp.Description("Single query object or array of query objects"),
+				mcp.Description("Parameters for symbol search"),
 			),
 		),
-		handleQuery,
+		handleSymbols,
+	)
+
+	// Register references tool
+	mcpServer.AddTool(
+		mcp.NewTool("references",
+			mcp.WithDescription(`Find all usages of a symbol. Get location from symbols tool first.
+
+EXAMPLE:
+{"path": "/src/user.ts", "line": 42, "column": 8}
+→ [{"path": "/src/api/handler.ts:25:10", "preview": "  const result = processUser(data);"}]`),
+			mcp.WithString("path",
+				mcp.Description("File containing the symbol"),
+			),
+			mcp.WithNumber("line",
+				mcp.Description("Line number of the symbol (1-based)"),
+			),
+			mcp.WithNumber("column",
+				mcp.Description("Column position (1-based)"),
+			),
+		),
+		handleReferences,
+	)
+
+	// Register fileTypes tool
+	mcpServer.AddTool(
+		mcp.NewTool("fileTypes",
+			mcp.WithDescription(`Get all types and top-level functions in a file. Best for file overview.
+
+EXAMPLE:
+{"path": "/src/models/user.ts"}
+→ [{"name": "User", "kind": "Class", "location": "/src/models/user.ts:15:7-15:11"},
+   {"name": "createUser", "kind": "Function", "location": "/src/models/user.ts:45:10-45:20"}]`),
+			mcp.WithString("path",
+				mcp.Description("File to analyze (absolute path)"),
+			),
+		),
+		handleFileTypes,
+	)
+
+	// Register diagnostics tool
+	mcpServer.AddTool(
+		mcp.NewTool("diagnostics",
+			mcp.WithDescription(`Get errors and warnings from language servers.
+
+EXAMPLES:
+All workspace issues: {}
+→ [{"path": "/src/app.ts:10:5", "severity": "error", "message": "Cannot find name 'foo'.", "source": "ts"}]
+
+Specific file: {"path": "/src/app.ts"}
+→ [{"path": "/src/app.ts:10:5", "severity": "error", "message": "Cannot find name 'foo'.", "source": "ts"}]`),
+			mcp.WithObject("args",
+				mcp.Description("Optional file path parameter"),
+			),
+		),
+		handleDiagnostics,
+	)
+
+	// Register definition tool
+	mcpServer.AddTool(
+		mcp.NewTool("definition",
+			mcp.WithDescription(`Jump to definition of a symbol. Get location from symbols tool first.
+
+EXAMPLE:
+{"path": "/src/app.ts", "line": 25, "column": 12}
+→ [{"path": "/src/models/user.ts:42:8", "range": "42:8-42:18", "preview": "export function processUser(data: UserData) {"}]`),
+			mcp.WithString("path",
+				mcp.Description("File containing the symbol"),
+			),
+			mcp.WithNumber("line",
+				mcp.Description("Line number (1-based)"),
+			),
+			mcp.WithNumber("column",
+				mcp.Description("Column position (1-based)"),
+			),
+		),
+		handleDefinition,
+	)
+
+	// Register supertype tool
+	mcpServer.AddTool(
+		mcp.NewTool("supertype",
+			mcp.WithDescription(`Find what a type extends or implements. Get location from symbols tool first.
+
+EXAMPLE:
+{"path": "/src/models/User.ts", "line": 5, "column": 14}
+→ [{"name": "BaseEntity", "kind": "Class", "path": "/src/models/base.ts:10:7", "range": "10:7-10:17"}]`),
+			mcp.WithString("path",
+				mcp.Description("File containing the type"),
+			),
+			mcp.WithNumber("line",
+				mcp.Description("Line number (1-based)"),
+			),
+			mcp.WithNumber("column",
+				mcp.Description("Column position (1-based)"),
+			),
+		),
+		handleSupertype,
+	)
+
+	// Register subtype tool
+	mcpServer.AddTool(
+		mcp.NewTool("subtype",
+			mcp.WithDescription(`Find implementations or subclasses of a type. Get location from symbols tool first.
+
+EXAMPLE:
+{"path": "/src/base/Repository.ts", "line": 1, "column": 7}
+→ [{"name": "UserRepository", "kind": "Class", "path": "/src/repos/user.ts:5:7", "range": "5:7-5:21"}]`),
+			mcp.WithString("path",
+				mcp.Description("File containing the type"),
+			),
+			mcp.WithNumber("line",
+				mcp.Description("Line number (1-based)"),
+			),
+			mcp.WithNumber("column",
+				mcp.Description("Column position (1-based)"),
+			),
+		),
+		handleSubtype,
 	)
 
 	// Start serving
@@ -242,7 +307,36 @@ func handleOpen(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTool
 	}, nil
 }
 
-func handleQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handleSymbols(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return handleQueryType(ctx, request, "symbols")
+}
+
+func handleReferences(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return handleQueryType(ctx, request, "references")
+}
+
+func handleFileTypes(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return handleQueryType(ctx, request, "fileTypes")
+}
+
+func handleDiagnostics(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return handleQueryType(ctx, request, "diagnostics")
+}
+
+func handleDefinition(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return handleQueryType(ctx, request, "definition")
+}
+
+func handleSupertype(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return handleQueryType(ctx, request, "supertype")
+}
+
+func handleSubtype(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return handleQueryType(ctx, request, "subtype")
+}
+
+// Common handler for all query types
+func handleQueryType(ctx context.Context, request mcp.CallToolRequest, queryType string) (*mcp.CallToolResult, error) {
 	// Get the args argument
 	args := request.GetArguments()
 	argsArg, exists := args["args"]
@@ -250,8 +344,15 @@ func handleQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 		return nil, fmt.Errorf("missing 'args' argument")
 	}
 
-	// Marshal the args to JSON (it's already in the right format)
-	argsJSON, err := json.Marshal(argsArg)
+	// Add the type field to the args
+	argsMap, ok := argsArg.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("args must be an object")
+	}
+	argsMap["type"] = queryType
+
+	// Marshal the args to JSON
+	argsJSON, err := json.Marshal(argsMap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal args: %v", err)
 	}
