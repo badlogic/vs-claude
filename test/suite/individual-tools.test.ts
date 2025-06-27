@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { DefinitionTool } from '../../src/tools/definition-tool';
 import { DiagnosticsTool } from '../../src/tools/diagnostics-tool';
-import { FileTypesTool } from '../../src/tools/file-types-tool';
+import { AllTypesInFileTool } from '../../src/tools/all-types-in-file-tool';
 import { ReferencesTool } from '../../src/tools/references-tool';
 import { SubtypeTool } from '../../src/tools/subtype-tool';
 import { SupertypeTool } from '../../src/tools/supertype-tool';
@@ -24,7 +24,7 @@ suite('Individual Tools Unit Tests', function () {
 	let definitionTool: DefinitionTool;
 	let supertypeTool: SupertypeTool;
 	let subtypeTool: SubtypeTool;
-	let fileTypesTool: FileTypesTool;
+	let allTypesInFileTool: AllTypesInFileTool;
 
 	suiteSetup(async () => {
 		// Wait for VS Code to fully activate
@@ -39,7 +39,7 @@ suite('Individual Tools Unit Tests', function () {
 		definitionTool = new DefinitionTool();
 		supertypeTool = new SupertypeTool();
 		subtypeTool = new SubtypeTool();
-		fileTypesTool = new FileTypesTool();
+		allTypesInFileTool = new AllTypesInFileTool();
 
 		// Give language servers time to initialize
 		console.log('Waiting for language servers to initialize...');
@@ -223,7 +223,7 @@ suite('Individual Tools Unit Tests', function () {
 
 	suite('File Types Tool', () => {
 		test('Should extract types from file', async () => {
-			const result = await fileTypesTool.execute({
+			const result = await allTypesInFileTool.execute({
 				path: getTestFilePath('typescript/user.service.ts')
 			});
 
@@ -241,7 +241,7 @@ suite('Individual Tools Unit Tests', function () {
 				{ path: getTestFilePath('csharp/UserService.cs') }
 			];
 
-			const results = await fileTypesTool.execute(requests);
+			const results = await allTypesInFileTool.execute(requests);
 			assert.strictEqual(results.length, 2, 'Should return 2 results');
 			
 			for (const result of results) {

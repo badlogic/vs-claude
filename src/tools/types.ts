@@ -91,8 +91,8 @@ export interface TypeHierarchyRequest {
 	column: number;
 }
 
-export interface FileTypesRequest {
-	type: 'fileTypes';
+export interface AllTypesInFileRequest {
+	type: 'allTypesInFile';
 	path: string;
 }
 

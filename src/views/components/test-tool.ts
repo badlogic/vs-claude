@@ -25,7 +25,7 @@ export class TestToolElement extends LitElement {
 		{ id: 'definition', title: 'Get Definition', tool: 'definition', expanded: true },
 		{ id: 'supertypes', title: 'Type Hierarchy - Supertypes', tool: 'supertype', expanded: true },
 		{ id: 'subtypes', title: 'Type Hierarchy - Subtypes', tool: 'subtype', expanded: true },
-		{ id: 'fileTypes', title: 'File Types', tool: 'fileTypes', expanded: true },
+		{ id: 'allTypesInFile', title: 'All Types in File', tool: 'allTypesInFile', expanded: true },
 		{ id: 'diagnostics', title: 'Diagnostics', tool: 'diagnostics', expanded: true },
 	];
 
@@ -36,7 +36,7 @@ export class TestToolElement extends LitElement {
 		definition: { path: '', line: '', column: '' },
 		supertypes: { path: '', line: '', column: '' },
 		subtypes: { path: '', line: '', column: '' },
-		fileTypes: { path: '' },
+		allTypesInFile: { path: '' },
 		diagnostics: { path: '' },
 	};
 
@@ -120,7 +120,7 @@ export class TestToolElement extends LitElement {
 					column: parseInt(data.column),
 				};
 				break;
-			case 'fileTypes':
+			case 'allTypesInFile':
 				args = { path: data.path };
 				break;
 			case 'diagnostics':
@@ -188,7 +188,7 @@ export class TestToolElement extends LitElement {
 			case 'subtypes':
 				this.formData[sectionId] = { path: '', line: '', column: '' };
 				break;
-			case 'fileTypes':
+			case 'allTypesInFile':
 			case 'diagnostics':
 				this.formData[sectionId] = { path: '' };
 				break;
@@ -211,8 +211,8 @@ export class TestToolElement extends LitElement {
 			};
 		});
 
-		// Also fill fileTypes path
-		this.formData.fileTypes = { path: path };
+		// Also fill allTypesInFile path
+		this.formData.allTypesInFile = { path: path };
 
 		this.requestUpdate();
 	}
@@ -606,7 +606,7 @@ export class TestToolElement extends LitElement {
 					</div>
 				`;
 
-			case 'fileTypes':
+			case 'allTypesInFile':
 				return html`
 					<div>
 						<label style="display: block; margin-bottom: 4px; font-size: 12px; opacity: 0.8;">File Path *</label>
@@ -614,7 +614,7 @@ export class TestToolElement extends LitElement {
 							<input
 								type="text"
 								.value=${data.path}
-								@input=${(e: Event) => this.updateFormData('fileTypes', 'path', (e.target as HTMLInputElement).value)}
+								@input=${(e: Event) => this.updateFormData('allTypesInFile', 'path', (e.target as HTMLInputElement).value)}
 								placeholder="/path/to/file.ts"
 								style="flex: 1; padding: 6px 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 4px; font-size: 13px;"
 							>

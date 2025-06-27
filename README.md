@@ -2,9 +2,18 @@
 
 A VS Code extension with an integrated MCP server that allows MCP clients like Claude to interact with Visual Studio Code.
 
+## ✨ Key Features
+
+- 🔍 **Advanced Symbol Search** - Find code elements with wildcards, hierarchical queries, and type filtering
+- 📊 **Batch Operations** - Execute multiple queries in parallel for optimal performance  
+- 🎨 **Modern UI** - Interactive test tool and log viewer built with Lit + Tailwind CSS
+- 🔧 **Full LSP Support** - References, definitions, diagnostics, and type hierarchy
+- 📁 **Smart File Operations** - Open files, diffs, and Git comparisons
+- 🚀 **Developer Friendly** - Hot reload, panel persistence, and comprehensive logging
+
 ## Overview
 
-VS Claude provides these tools for AI assistants to interact with VS Code:
+VS Claude provides powerful tools for AI assistants to interact with VS Code, featuring modern webviews, comprehensive code intelligence, and batch operations for optimal performance.
 
 ### Navigation Tools
 
@@ -37,7 +46,7 @@ VS Claude provides these tools for AI assistants to interact with VS Code:
    - Returns severity, message, and location
    - **Batch support**: Check multiple files
 
-6. **fileTypes** - Get all types and top-level functions in a file
+6. **allTypesInFile** - Get all types and top-level functions in a file
    - Extract classes, interfaces, structs, enums
    - Include top-level functions
    - Returns complete type hierarchy with members
@@ -68,6 +77,30 @@ mcp_vs-claude_symbols({args: [
   {query: "process*", path: "/path/to/file.ts"}
 ]})
 ```
+
+## 🎨 Modern UI Features
+
+### Interactive Test Tool
+- **Live testing interface** for all VS Claude tools
+- **Non-collapsible sections** showing all tools at once
+- **Toggleable symbol kind badges** for easy filtering
+- **Clickable locations** that auto-fill other tool inputs
+- **Open file buttons** (↗) next to paths and symbol locations
+- **Colored badges** for different symbol types with consistent theming
+
+### Enhanced Log Viewer
+- **Real-time log streaming** with auto-scroll
+- **Colored component badges** with hash-based color assignment
+- **Horizontal scrolling** for long messages
+- **JSON syntax highlighting** for structured data
+- **Fixed-width columns** for consistent alignment
+- **Smart auto-scroll** that respects user scroll position
+
+### Development Features
+- **Panel persistence** - Webview panels automatically reopen after extension reload
+- **Modern tech stack** - Built with Lit Web Components and Tailwind CSS
+- **Light DOM rendering** - Full VS Code theme integration
+- **Responsive design** - Adapts to different panel sizes
 
 ## Installation
 
@@ -111,7 +144,8 @@ VS Claude consists of two components:
 **Commands:**
 - `VS Claude: Install MCP` - Install the MCP server with Claude
 - `VS Claude: Uninstall MCP` - Remove the MCP server from Claude
-- `VS Claude: Test Query Tool` - Open interactive query tester
+- `VS Claude: Test Query Tool` - Open interactive query tester with all tools
+- `VS Claude: Show Logs` - View real-time extension logs with colored output
 
 ### MCP Server (Go)
 - Simple proxy that forwards tool calls from MCP clients to VS Code
@@ -138,11 +172,18 @@ MCP Client (Claude) ↔ MCP Server ↔ File System ↔ VS Code Extension
 ### Scripts
 
 ```bash
-npm run build  # Build TypeScript and Go binaries
-npm run check  # Format, lint, and type check all code
-npm run test   # Run e2e tests (builds MCP server, compiles tests, launches VS Code)
-npm run clean  # Remove build artifacts
+npm run build       # Build TypeScript, webviews, and Go binaries
+npm run build:debug # Build with Go debug symbols (no cross-compilation)
+npm run check       # Format with Biome, lint, and type check all code
+npm run test        # Run e2e tests (builds MCP server, compiles tests, launches VS Code)
+npm run clean       # Remove build artifacts
 ```
+
+### Build System
+- **Unified webview building** with `scripts/build-webviews.js`
+- **Parallel JavaScript bundling** with esbuild
+- **Tailwind CSS compilation** with automatic VS Code theme variables
+- **Cross-platform Go binaries** for macOS (Intel/ARM), Linux, and Windows
 
 ### Project Structure
 ```
@@ -150,33 +191,49 @@ vs-claude/
 ├── src/                 # TypeScript extension source
 │   ├── extension.ts     # Main entry point
 │   ├── tools/           # Individual tool implementations
-│   │   ├── symbols-tool.ts      # Symbol search
-│   │   ├── references-tool.ts   # Find references
-│   │   ├── definition-tool.ts   # Go to definition
-│   │   ├── diagnostics-tool.ts  # Error/warning detection
-│   │   ├── file-types-tool.ts   # Type extraction
-│   │   ├── supertype-tool.ts    # Type hierarchy up
-│   │   ├── subtype-tool.ts      # Type hierarchy down
-│   │   └── types.ts              # Shared types
-│   ├── query-handler.ts # Legacy query tool (for backward compatibility)
-│   ├── open-handler.ts  # Open tool implementation
-│   ├── command-handler.ts # Command dispatcher
-│   ├── window-manager.ts # Window IPC management
-│   └── setup.ts         # MCP installation logic
+│   │   ├── symbols-tool.ts           # Symbol search with wildcards
+│   │   ├── references-tool.ts        # Find all usages
+│   │   ├── definition-tool.ts        # Go to definition
+│   │   ├── diagnostics-tool.ts       # Error/warning detection
+│   │   ├── all-types-in-file-tool.ts # Extract all types from file
+│   │   ├── sub-and-super-type-tool.ts # Type hierarchy navigation
+│   │   ├── open-tool.ts              # Open files/diffs
+│   │   └── types.ts                  # Shared TypeScript types
+│   ├── views/           # Modern webview implementations
+│   │   ├── components/  # Lit Web Components
+│   │   │   ├── log-entry.ts    # Individual log entry component
+│   │   │   ├── log-viewer.ts   # Log viewer container
+│   │   │   └── test-tool.ts    # Test tool interface
+│   │   ├── log-viewer-webview.ts  # Log viewer entry point
+│   │   ├── test-tool-webview.ts   # Test tool entry point
+│   │   ├── webview-base.ts        # Shared webview utilities
+│   │   ├── styles.css             # Tailwind CSS styles
+│   │   ├── tailwind.config.js    # Tailwind configuration
+│   │   └── tsconfig.json          # Browser-specific TypeScript config
+│   ├── command-handler.ts   # Command dispatcher with batch support
+│   ├── window-manager.ts    # Window IPC management
+│   ├── logger.ts            # Structured logging system
+│   ├── log-viewer-provider.ts  # Log viewer webview provider
+│   ├── test-tool-provider.ts   # Test tool webview provider
+│   └── setup.ts             # MCP installation logic
 ├── mcp/                 # Go MCP server source
 │   └── main.go         # MCP server implementation
-├── test/                # Test suite
+├── scripts/             # Build and utility scripts
+│   ├── build-webviews.js    # Webview bundling script
+│   └── build-binaries.sh    # Cross-platform Go compilation
+├── test/                # Comprehensive test suite
 │   ├── suite/
-│   │   ├── open-tool.test.ts  # Open tool e2e tests
-│   │   ├── query-tool.test.ts # Query tool e2e tests
-│   │   ├── extension.test.ts  # Extension unit tests
-│   │   └── test-helpers.ts    # Shared test utilities
+│   │   ├── individual-tools.test.ts # Individual tool tests
+│   │   ├── query-patterns.test.ts   # Pattern matching tests
+│   │   ├── open-tool.test.ts        # Open tool tests
+│   │   └── test-helpers.ts          # Shared test utilities
 │   ├── test-workspace/  # Multi-language test project
 │   │   └── src/        # Sample code in various languages
 │   ├── setup-test-workspace.js # Git setup for tests
 │   └── runTest.ts      # Test runner
 ├── bin/                # Built binaries (generated)
-└── out/                # Compiled TypeScript (generated)
+├── out/                # Compiled TypeScript (generated)
+└── CLAUDE.md           # Project-specific instructions
 ```
 
 ### Testing
@@ -238,6 +295,26 @@ mcp_vs-claude_query({
 #### Java Type Hierarchy
 The Java Language Server (used by the Red Hat Java extension) does not support the standard VS Code type hierarchy API. As a result, the `supertype` and `subtype` tools will not work with Java files. The Java extension implements its own custom type hierarchy using proprietary workspace commands instead of the standard LSP 3.17 type hierarchy protocol.
 
+
+## Recent Improvements
+
+### 🚀 Performance
+- **Batch operations** for all code intelligence tools
+- **Parallel processing** of multiple requests
+- **Optimized file traversal** for folder searches
+- **Count-only mode** for large result sets
+
+### 🛠️ Code Quality
+- **TypeScript strict mode** throughout the codebase
+- **Biome** for fast, opinionated formatting and linting
+- **Comprehensive test coverage** with real VS Code integration tests
+- **Modular architecture** with single-responsibility tools
+
+### 🎯 Developer Experience
+- **CLAUDE.md integration** for project-specific AI instructions
+- **Hot reload support** with webview persistence
+- **Detailed logging** with structured output
+- **Clear error messages** with actionable feedback
 
 ## Contributing
 

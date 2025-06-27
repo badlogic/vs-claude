@@ -192,7 +192,7 @@ test('Should support new query feature', async () => {
 
 The test framework covers:
 
-1. **All query types**: symbols, references, definition, diagnostics, fileTypes, hierarchy
+1. **All query types**: symbols, references, definition, diagnostics, allTypesInFile, hierarchy
 2. **All query options**: kinds, exclude, countOnly, path
 3. **Pattern matching**: wildcards, hierarchical, brace expansion
 4. **Error handling**: invalid inputs, missing files, unsupported operations

@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
 import { logger } from '../logger';
-import type { CodeSymbol, FileTypesRequest, ToolResponse } from './types';
+import type { AllTypesInFileRequest, CodeSymbol, ToolResponse } from './types';
 
 /**
- * This tool is used to get the types and top-levelfunctions in a given file.
+ * This tool is used to get all types and top-level functions in a given file.
  */
-export class FileTypesTool {
-	public async execute(request: FileTypesRequest): Promise<ToolResponse<CodeSymbol[]>> {
+export class AllTypesInFileTool {
+	public async execute(request: AllTypesInFileRequest): Promise<ToolResponse<CodeSymbol[]>> {
 		try {
 			const uri = vscode.Uri.file(request.path);
 
@@ -17,7 +17,7 @@ export class FileTypesTool {
 			);
 
 			if (!documentSymbols) {
-				logger.debug('FileTypesTool', `No symbol provider available for ${uri.fsPath}`);
+				logger.debug('AllTypesInFileTool', `No symbol provider available for ${uri.fsPath}`);
 				return { success: true, data: [] };
 			}
 
@@ -60,10 +60,10 @@ export class FileTypesTool {
 
 			extractTypesAndFunctions(documentSymbols);
 
-			logger.info('FileTypesTool', `Found ${results.length} types and functions in ${request.path}`);
+			logger.info('AllTypesInFileTool', `Found ${results.length} types and functions in ${request.path}`);
 			return { success: true, data: results };
 		} catch (error) {
-			logger.error('FileTypesTool', `Failed to get file types: ${error}`);
+			logger.error('AllTypesInFileTool', `Failed to get file types: ${error}`);
 			return { success: false, error: `Failed to get file types: ${error}` };
 		}
 	}

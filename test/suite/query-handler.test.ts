@@ -400,7 +400,7 @@ suite('Query Handler Unit Tests', function () {
 	suite('File Types Queries', () => {
 		test('Should get all types and top-level functions', async () => {
 			const result = await queryHandler.execute({
-				type: 'fileTypes',
+				type: 'allTypesInFile',
 				path: getTestFilePath('typescript/user.service.ts')
 			});
 
@@ -452,7 +452,7 @@ suite('Query Handler Unit Tests', function () {
 			await new Promise(resolve => setTimeout(resolve, 1000));
 
 			const result = await queryHandler.execute({
-				type: 'fileTypes',
+				type: 'allTypesInFile',
 				path: testFile
 			});
 

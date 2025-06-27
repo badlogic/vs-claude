@@ -286,7 +286,7 @@ suite('Query Pattern E2E Tests', function () {
 
 	suite('File Types Query', () => {
 		test('Should extract all types from TypeScript file', async () => {
-			const result = await mcpClient.callTool('fileTypes', {
+			const result = await mcpClient.callTool('allTypesInFile', {
 				path: `${process.cwd()}/out/test/test-workspace/src/typescript/user.service.ts`
 			});
 
@@ -305,7 +305,7 @@ suite('Query Pattern E2E Tests', function () {
 
 		test('Should handle files with only functions', async () => {
 			// Most of our test files have classes, but this tests the function detection
-			const result = await mcpClient.callTool('fileTypes', {
+			const result = await mcpClient.callTool('allTypesInFile', {
 				path: `${process.cwd()}/out/test/test-workspace/src/typescript/user.service.ts`
 			});
 
@@ -328,7 +328,7 @@ suite('Query Pattern E2E Tests', function () {
 				query: 'get*',
 				kinds: ['method']
 			});
-			const fileTypesResult = await mcpClient.callTool('fileTypes', {
+			const fileTypesResult = await mcpClient.callTool('allTypesInFile', {
 				path: `${process.cwd()}/src/typescript/user.service.ts`
 			});
 			const diagnosticsResult = await mcpClient.callTool('diagnostics', {});
@@ -336,7 +336,7 @@ suite('Query Pattern E2E Tests', function () {
 			// Check all succeeded
 			assert.ok(symbolsResult1.success, 'First symbols query should succeed');
 			assert.ok(symbolsResult2.success, 'Second symbols query should succeed');
-			assert.ok(fileTypesResult.success, 'FileTypes query should succeed');
+			assert.ok(fileTypesResult.success, 'AllTypesInFile query should succeed');
 			assert.ok(diagnosticsResult.success, 'Diagnostics query should succeed');
 		});
 	});

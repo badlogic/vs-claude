@@ -1,15 +1,15 @@
 import { logger } from './logger';
+import { AllTypesInFileTool } from './tools/all-types-in-file-tool';
 import { DefinitionTool } from './tools/definition-tool';
 import { DiagnosticsTool } from './tools/diagnostics-tool';
-import { FileTypesTool } from './tools/file-types-tool';
 import { OpenHandler } from './tools/open-tool';
 import { ReferencesTool } from './tools/references-tool';
 import { SubAndSupertypeTool } from './tools/sub-and-super-type-tool';
 import { SymbolsTool } from './tools/symbols-tool';
 import type {
+	AllTypesInFileRequest,
 	DefinitionRequest,
 	DiagnosticsRequest,
-	FileTypesRequest,
 	OpenRequest,
 	ReferenceRequest,
 	SymbolsRequest,
@@ -25,7 +25,7 @@ export type TypedCommand =
 	| { id: string; tool: 'definition'; args: DefinitionRequest[] }
 	| { id: string; tool: 'supertype'; args: TypeHierarchyRequest[] }
 	| { id: string; tool: 'subtype'; args: TypeHierarchyRequest[] }
-	| { id: string; tool: 'fileTypes'; args: FileTypesRequest[] };
+	| { id: string; tool: 'allTypesInFile'; args: AllTypesInFileRequest[] };
 
 // Raw command from MCP (before type validation)
 export interface Command {
@@ -48,7 +48,7 @@ export class CommandHandler {
 	private referencesTool: ReferencesTool;
 	private definitionTool: DefinitionTool;
 	private subAndSupertypeTool: SubAndSupertypeTool;
-	private fileTypesTool: FileTypesTool;
+	private allTypesInFileTool: AllTypesInFileTool;
 
 	constructor() {
 		this.openHandler = new OpenHandler();
@@ -57,7 +57,7 @@ export class CommandHandler {
 		this.referencesTool = new ReferencesTool();
 		this.definitionTool = new DefinitionTool();
 		this.subAndSupertypeTool = new SubAndSupertypeTool();
-		this.fileTypesTool = new FileTypesTool();
+		this.allTypesInFileTool = new AllTypesInFileTool();
 	}
 
 	/**
@@ -72,7 +72,7 @@ export class CommandHandler {
 			command.tool === 'definition' ||
 			command.tool === 'supertype' ||
 			command.tool === 'subtype' ||
-			command.tool === 'fileTypes'
+			command.tool === 'allTypesInFile'
 		);
 	}
 
@@ -159,8 +159,10 @@ export class CommandHandler {
 					break;
 				}
 
-				case 'fileTypes': {
-					const results = await Promise.all(typedCommand.args.map((arg) => this.fileTypesTool.execute(arg)));
+				case 'allTypesInFile': {
+					const results = await Promise.all(
+						typedCommand.args.map((arg) => this.allTypesInFileTool.execute(arg))
+					);
 					result = typedCommand.args.length === 1 ? results[0] : { success: true, data: results };
 					break;
 				}

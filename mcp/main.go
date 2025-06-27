@@ -148,9 +148,9 @@ RETURNS:
 		handleTool,
 	)
 
-	// Register fileTypes tool
+	// Register allTypesInFile tool
 	mcpServer.AddTool(
-		mcp.NewTool("fileTypes",
+		mcp.NewTool("allTypesInFile",
 			mcp.WithDescription(`Get all types and top-level functions in a file. Best for file overview.
 
 SINGLE REQUEST:
