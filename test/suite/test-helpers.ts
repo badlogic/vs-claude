@@ -114,7 +114,7 @@ export class MCPClient {
 			method: 'tools/call',
 			params: {
 				name,
-				arguments: { ...args, windowId: this.windowId },
+				arguments: { args, windowId: this.windowId },
 			},
 		};
 

@@ -1,77 +1,83 @@
 import { exec } from 'child_process';
+import * as fs from 'fs';
 import * as path from 'path';
 import { promisify } from 'util';
+import type { Event, Uri } from 'vscode';
 import * as vscode from 'vscode';
-import type { GitAPI, GitExtension } from './git';
-import { findGitRoot } from './git-utils';
-import { logger } from './logger';
+import { logger } from '../logger';
+import type { OpenDiffRequest, OpenFileRequest, OpenGitDiffRequest, OpenRequest } from './types';
+
+export type APIState = 'uninitialized' | 'initialized';
+
+export interface GitExtension {
+	getAPI(version: 1): GitAPI;
+}
+
+export interface GitAPI {
+	readonly state: APIState;
+	readonly onDidChangeState: Event<APIState>;
+	readonly repositories: Repository[];
+	readonly onDidOpenRepository: Event<Repository>;
+	readonly onDidCloseRepository: Event<Repository>;
+	toGitUri(uri: Uri, ref: string): Uri;
+}
+
+export interface Repository {
+	rootUri: Uri;
+}
+
+function findGitRoot(startPath: string): string | null {
+	let currentPath = startPath;
+
+	// Keep going up until we find .git or reach the root
+	while (currentPath !== path.dirname(currentPath)) {
+		const gitPath = path.join(currentPath, '.git');
+
+		if (fs.existsSync(gitPath)) {
+			return currentPath;
+		}
+
+		currentPath = path.dirname(currentPath);
+	}
+
+	return null;
+}
+
+export async function suggestOpenGitRoot(workspacePath: string, outputChannel: vscode.OutputChannel): Promise<void> {
+	const gitRoot = findGitRoot(workspacePath);
+
+	if (gitRoot && gitRoot !== workspacePath) {
+		outputChannel.appendLine(`Found git repository at: ${gitRoot}`);
+
+		const relative = path.relative(gitRoot, workspacePath);
+		const answer = await vscode.window.showErrorMessage(
+			`You opened a subfolder (${relative}) of a git repository. Git features require opening the repository root.`,
+			'Open Repository Root',
+			'Cancel'
+		);
+
+		if (answer === 'Open Repository Root') {
+			await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(gitRoot));
+		}
+	}
+}
 
 const execPromise = promisify(exec);
 
-// Types for the open command
-interface OpenFileItem {
-	type: 'file';
-	path: string;
-	startLine?: number;
-	endLine?: number;
-	preview?: boolean;
-}
-
-interface OpenDiffItem {
-	type: 'diff';
-	left: string;
-	right: string;
-	title?: string;
-}
-
-interface OpenGitDiffItem {
-	type: 'gitDiff';
-	path: string;
-	from: string;
-	to: string;
-	context?: number;
-}
-
-type OpenItem = OpenFileItem | OpenDiffItem | OpenGitDiffItem;
-
-// OpenArgs can be:
-// 1. A single OpenItem object
-// 2. An array of OpenItem objects
-type OpenArgs = OpenItem | OpenItem[];
-
+/**
+ * This tool is used to open a file, diff, or git diff.
+ */
 export class OpenHandler {
-	async execute(args: OpenArgs): Promise<{ success: boolean; error?: string }> {
-		// Log the open command
-		if (Array.isArray(args)) {
-			logger.info('OpenHandler', `Opening ${args.length} items`);
-		} else {
-			const type =
-				args.type === 'file'
-					? `file ${args.path}`
-					: args.type === 'diff'
-						? `diff ${args.left} ↔ ${args.right}`
-						: `git diff ${args.path} (${args.from} → ${args.to})`;
-			logger.info('OpenHandler', `Opening ${type}`);
-		}
-
-		// Normalize to array of items
-		let items: OpenItem[];
-
-		if (Array.isArray(args)) {
-			// Array of items
-			items = args;
-		} else {
-			// Single item
-			items = [args];
-		}
+	public async execute(items: OpenRequest[]): Promise<{ success: boolean; error?: string }> {
+		logger.info('OpenHandler', `Opening ${items.length} items`);
 
 		// Track successes and failures
 		let successCount = 0;
-		const failedItems: Array<{ item: OpenItem; error: string }> = [];
+		const failedItems: Array<{ item: OpenRequest; error: string }> = [];
 
 		// Group file items by path to handle multiple highlights
-		const fileGroups = new Map<string, OpenFileItem[]>();
-		const otherItems: OpenItem[] = [];
+		const fileGroups = new Map<string, OpenFileRequest[]>();
+		const otherItems: OpenRequest[] = [];
 
 		for (const item of items) {
 			if (item.type === 'file') {
@@ -132,7 +138,7 @@ export class OpenHandler {
 		}
 	}
 
-	private async openItem(item: OpenItem): Promise<void> {
+	private async openItem(item: OpenRequest): Promise<void> {
 		switch (item.type) {
 			case 'file':
 				await this.openFile(item);
@@ -144,11 +150,11 @@ export class OpenHandler {
 				await this.openGitDiff(item);
 				break;
 			default:
-				throw new Error(`Unknown item type: ${(item as OpenItem).type}`);
+				throw new Error(`Unknown item type: ${(item as OpenRequest).type}`);
 		}
 	}
 
-	private async openFile(item: OpenFileItem): Promise<void> {
+	private async openFile(item: OpenFileRequest): Promise<void> {
 		const uri = vscode.Uri.file(item.path);
 		logger.debug('OpenHandler', `Opening file: ${item.path}`);
 		const doc = await vscode.workspace.openTextDocument(uri);
@@ -173,7 +179,7 @@ export class OpenHandler {
 		}
 	}
 
-	private async openFileWithMultipleSelections(items: OpenFileItem[]): Promise<void> {
+	private async openFileWithMultipleSelections(items: OpenFileRequest[]): Promise<void> {
 		if (items.length === 0) return;
 
 		const uri = vscode.Uri.file(items[0].path);
@@ -217,7 +223,7 @@ export class OpenHandler {
 		}
 	}
 
-	private async openDiff(item: OpenDiffItem): Promise<void> {
+	private async openDiff(item: OpenDiffRequest): Promise<void> {
 		const leftUri = vscode.Uri.file(item.left);
 		const rightUri = vscode.Uri.file(item.right);
 		logger.debug('OpenHandler', `Opening diff: ${item.left} ↔ ${item.right}`);
@@ -231,7 +237,7 @@ export class OpenHandler {
 		);
 	}
 
-	private async openGitDiff(item: OpenGitDiffItem): Promise<void> {
+	private async openGitDiff(item: OpenGitDiffRequest): Promise<void> {
 		logger.debug('OpenHandler', `Opening git diff: ${item.path} (${item.from} → ${item.to})`);
 
 		// Get git extension
@@ -398,7 +404,7 @@ export class OpenHandler {
 		return String(error);
 	}
 
-	private formatItemError(item: OpenItem, error: unknown): string {
+	private formatItemError(item: OpenRequest, error: unknown): string {
 		const errorStr = error instanceof Error ? error.message : String(error);
 
 		switch (item.type) {

@@ -4,31 +4,70 @@ A VS Code extension with an integrated MCP server that allows MCP clients like C
 
 ## Overview
 
-VS Claude provides two tools for AI assistants:
+VS Claude provides these tools for AI assistants to interact with VS Code:
 
-1. **query** - Semantic code search using VS Code's language intelligence
-   - Find symbols (classes, methods, functions, variables, etc.) with hierarchical queries
-   - Get references, definitions, and diagnostics
-   - Explore type hierarchies (supertypes/subtypes)
-   - Get all types and top-level functions in a file
-   - See [`mcp/main.go`](mcp/main.go) for the full tool description
+### Navigation Tools
 
-2. **open** - File navigation and diff viewing
+1. **open** - Open files, diffs, and symbols in VS Code
    - Open files with line highlighting
    - Show git diffs and file comparisons
+   - Jump to specific lines or ranges
    - See [`mcp/main.go`](mcp/main.go) for the full tool description
 
-### Query Types
+### Code Intelligence Tools
 
-The query tool supports these query types:
+2. **symbols** - Find code elements by pattern with support for wildcards and hierarchical queries
+   - Supports wildcards (*, ?, [abc], {a,b,c}, **) and hierarchical queries (Class.method)
+   - Filter by symbol types (class, method, function, etc.)
+   - Search in specific files, folders, or entire workspace
+   - **Batch support**: Execute multiple symbol searches in parallel
 
-1. **symbols** - Find code elements by pattern with support for wildcards and hierarchical queries
-2. **references** - Find all usages of a symbol at a specific location
-3. **definition** - Get the definition location of a symbol
-4. **supertype** - Find what a type extends/implements
-5. **subtype** - Find implementations/subclasses of a type
-6. **diagnostics** - Get errors and warnings from the language server
-7. **fileTypes** - Get all types (classes, interfaces, structs, enums) and top-level functions in a file
+3. **references** - Find all usages of a symbol at a specific location
+   - Requires symbol location from symbols tool
+   - Returns file paths with preview of usage
+   - **Batch support**: Find references for multiple symbols
+
+4. **definition** - Get the definition location of a symbol
+   - Jump to where a symbol is defined
+   - Returns location with preview and symbol kind
+   - **Batch support**: Get definitions for multiple symbols
+
+5. **diagnostics** - Get errors and warnings from the language server
+   - Get all workspace diagnostics or for specific files
+   - Returns severity, message, and location
+   - **Batch support**: Check multiple files
+
+6. **fileTypes** - Get all types and top-level functions in a file
+   - Extract classes, interfaces, structs, enums
+   - Include top-level functions
+   - Returns complete type hierarchy with members
+   - **Batch support**: Analyze multiple files
+
+7. **supertype** - Find what a type extends/implements
+   - Get base classes and interfaces
+   - May not be supported by all language servers
+   - **Batch support**: Check multiple types
+
+8. **subtype** - Find implementations/subclasses of a type
+   - Find derived classes and interface implementations
+   - May not be supported by all language servers
+   - **Batch support**: Check multiple types
+
+### Batch Operations
+
+All code intelligence tools support batch operations for improved performance:
+
+```javascript
+// Single request
+mcp_vs-claude_symbols({args: {query: "UserService", kinds: ["class"]}})
+
+// Batch requests (executed in parallel)
+mcp_vs-claude_symbols({args: [
+  {query: "get*", kinds: ["method"]},
+  {query: "User*", kinds: ["interface"]},
+  {query: "process*", path: "/path/to/file.ts"}
+]})
+```
 
 ## Installation
 
@@ -110,7 +149,16 @@ npm run clean  # Remove build artifacts
 vs-claude/
 ├── src/                 # TypeScript extension source
 │   ├── extension.ts     # Main entry point
-│   ├── query-handler.ts # Query tool implementation
+│   ├── tools/           # Individual tool implementations
+│   │   ├── symbols-tool.ts      # Symbol search
+│   │   ├── references-tool.ts   # Find references
+│   │   ├── definition-tool.ts   # Go to definition
+│   │   ├── diagnostics-tool.ts  # Error/warning detection
+│   │   ├── file-types-tool.ts   # Type extraction
+│   │   ├── supertype-tool.ts    # Type hierarchy up
+│   │   ├── subtype-tool.ts      # Type hierarchy down
+│   │   └── types.ts              # Shared types
+│   ├── query-handler.ts # Legacy query tool (for backward compatibility)
 │   ├── open-handler.ts  # Open tool implementation
 │   ├── command-handler.ts # Command dispatcher
 │   ├── window-manager.ts # Window IPC management

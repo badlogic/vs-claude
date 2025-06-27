@@ -16,8 +16,6 @@ import (
 
 var vsClaudeDir = filepath.Join(os.Getenv("HOME"), ".vs-claude")
 
-// No need for specific arg types - we'll pass through as JSON
-
 type WindowInfo struct {
 	Workspace   string    `json:"workspace"`
 	WindowTitle string    `json:"windowTitle"`
@@ -84,13 +82,23 @@ Notes:
 				mcp.Description("Single item object or array of items to open. All file paths must be absolute."),
 			),
 		),
-		handleOpen,
+		handleTool,
 	)
 
 	// Register symbols tool
 	mcpServer.AddTool(
 		mcp.NewTool("symbols",
 			mcp.WithDescription(`Find code elements using VS Code's language intelligence. USE THIS INSTEAD OF GREP/RIPGREP for finding code.
+
+SINGLE REQUEST:
+{"query": "UserService", "kinds": ["class"]}
+
+BATCH REQUESTS (execute multiple searches in parallel):
+[
+  {"query": "get*", "kinds": ["method"]},
+  {"query": "User*", "kinds": ["interface"]},
+  {"query": "process*", "path": "/path/to/file.ts"}
+]
 
 PARAMETERS:
 - query?: pattern to match (default "*"). Use . for hierarchy, not :: or ->
@@ -101,26 +109,19 @@ PARAMETERS:
 - exclude?: glob patterns to skip ["**/test/**"]
 - countOnly?: return count only (faster for broad queries)
 
-EXAMPLES:
-Find class: {"query": "UserService"}
-→ [{"name": "UserService", "kind": "Class", "location": "/src/user.ts:15:7-15:18"}]
-
-Find methods: {"query": "UserService.*", "kinds": ["method"]}
-→ [{"name": "UserService", "kind": "Class", "location": "/src/user.ts:15:7-15:18",
-    "children": [{"name": "create", "kind": "Method", "location": "20:3-20:9"}]}]
-
-Count test classes: {"query": "*Test", "kinds": ["class"], "countOnly": true}
-→ {"count": 42}
+RETURNS:
+- Single request: {"success": true, "data": [array of symbols]}
+- Batch requests: [{"success": true, "data": [...]}, {"success": false, "error": "..."}]
 
 LOCATION FORMAT:
 Top-level: "path:line:col-line:col"
-Children: "line:col-line:col" (relative to parent)
+Children: "line:col-line:col" (within file in top-level root path)
 Use these locations for references/definition/supertype/subtype tools.`),
 			mcp.WithObject("args",
-				mcp.Description("Parameters for symbol search"),
+				mcp.Description("Single request object or array of requests for batch operations"),
 			),
 		),
-		handleSymbols,
+		handleTool,
 	)
 
 	// Register references tool
@@ -128,20 +129,23 @@ Use these locations for references/definition/supertype/subtype tools.`),
 		mcp.NewTool("references",
 			mcp.WithDescription(`Find all usages of a symbol. Get location from symbols tool first.
 
-EXAMPLE:
+SINGLE REQUEST:
 {"path": "/src/user.ts", "line": 42, "column": 8}
-→ [{"path": "/src/api/handler.ts:25:10", "preview": "  const result = processUser(data);"}]`),
-			mcp.WithString("path",
-				mcp.Description("File containing the symbol"),
-			),
-			mcp.WithNumber("line",
-				mcp.Description("Line number of the symbol (1-based)"),
-			),
-			mcp.WithNumber("column",
-				mcp.Description("Column position (1-based)"),
+
+BATCH REQUESTS (find references for multiple symbols):
+[
+  {"path": "/src/user.ts", "line": 42, "column": 8},
+  {"path": "/src/api.ts", "line": 15, "column": 12}
+]
+
+RETURNS:
+- Single: {"success": true, "data": [{"location": "/src/api/handler.ts:25:10", "preview": "  const result = processUser(data);"}]}
+- Batch: [{"success": true, "data": [...]}, {"success": true, "data": [...]}]`),
+			mcp.WithObject("args",
+				mcp.Description("Single location object or array of locations for batch operations"),
 			),
 		),
-		handleReferences,
+		handleTool,
 	)
 
 	// Register fileTypes tool
@@ -149,15 +153,23 @@ EXAMPLE:
 		mcp.NewTool("fileTypes",
 			mcp.WithDescription(`Get all types and top-level functions in a file. Best for file overview.
 
-EXAMPLE:
+SINGLE REQUEST:
 {"path": "/src/models/user.ts"}
-→ [{"name": "User", "kind": "Class", "location": "/src/models/user.ts:15:7-15:11"},
-   {"name": "createUser", "kind": "Function", "location": "/src/models/user.ts:45:10-45:20"}]`),
-			mcp.WithString("path",
-				mcp.Description("File to analyze (absolute path)"),
+
+BATCH REQUESTS (analyze multiple files):
+[
+  {"path": "/src/models/user.ts"},
+  {"path": "/src/models/product.ts"}
+]
+
+RETURNS:
+- Single: {"success": true, "data": [{"name": "User", "kind": "Class", "location": "...", "children": [...]}]}
+- Batch: [{"success": true, "data": [...]}, {"success": true, "data": [...]}]`),
+			mcp.WithObject("args",
+				mcp.Description("Single file path object or array of file paths for batch operations"),
 			),
 		),
-		handleFileTypes,
+		handleTool,
 	)
 
 	// Register diagnostics tool
@@ -165,17 +177,25 @@ EXAMPLE:
 		mcp.NewTool("diagnostics",
 			mcp.WithDescription(`Get errors and warnings from language servers.
 
-EXAMPLES:
-All workspace issues: {}
-→ [{"path": "/src/app.ts:10:5", "severity": "error", "message": "Cannot find name 'foo'.", "source": "ts"}]
+SINGLE REQUEST:
+{} // All workspace diagnostics
+{"path": "/src/app.ts"} // Specific file
 
-Specific file: {"path": "/src/app.ts"}
-→ [{"path": "/src/app.ts:10:5", "severity": "error", "message": "Cannot find name 'foo'.", "source": "ts"}]`),
+BATCH REQUESTS (check multiple files):
+[
+  {"path": "/src/app.ts"},
+  {"path": "/src/user.ts"},
+  {} // Include workspace-wide diagnostics
+]
+
+RETURNS:
+- Single: {"success": true, "data": [{"path": "/src/app.ts:10:5", "severity": "error", "message": "..."}]}
+- Batch: [{"success": true, "data": [...]}, {"success": true, "data": [...]}]`),
 			mcp.WithObject("args",
-				mcp.Description("Optional file path parameter"),
+				mcp.Description("Single request object or array of requests for batch operations"),
 			),
 		),
-		handleDiagnostics,
+		handleTool,
 	)
 
 	// Register definition tool
@@ -183,20 +203,23 @@ Specific file: {"path": "/src/app.ts"}
 		mcp.NewTool("definition",
 			mcp.WithDescription(`Jump to definition of a symbol. Get location from symbols tool first.
 
-EXAMPLE:
+SINGLE REQUEST:
 {"path": "/src/app.ts", "line": 25, "column": 12}
-→ [{"path": "/src/models/user.ts:42:8", "range": "42:8-42:18", "preview": "export function processUser(data: UserData) {"}]`),
-			mcp.WithString("path",
-				mcp.Description("File containing the symbol"),
-			),
-			mcp.WithNumber("line",
-				mcp.Description("Line number (1-based)"),
-			),
-			mcp.WithNumber("column",
-				mcp.Description("Column position (1-based)"),
+
+BATCH REQUESTS (find definitions for multiple symbols):
+[
+  {"path": "/src/app.ts", "line": 25, "column": 12},
+  {"path": "/src/app.ts", "line": 30, "column": 8}
+]
+
+RETURNS:
+- Single: {"success": true, "data": [{"location": "/src/models/user.ts:42:8", "preview": "...", "kind": "Function"}]}
+- Batch: [{"success": true, "data": [...]}, {"success": true, "data": [...]}]`),
+			mcp.WithObject("args",
+				mcp.Description("Single location object or array of locations for batch operations"),
 			),
 		),
-		handleDefinition,
+		handleTool,
 	)
 
 	// Register supertype tool
@@ -204,20 +227,25 @@ EXAMPLE:
 		mcp.NewTool("supertype",
 			mcp.WithDescription(`Find what a type extends or implements. Get location from symbols tool first.
 
-EXAMPLE:
+SINGLE REQUEST:
 {"path": "/src/models/User.ts", "line": 5, "column": 14}
-→ [{"name": "BaseEntity", "kind": "Class", "path": "/src/models/base.ts:10:7", "range": "10:7-10:17"}]`),
-			mcp.WithString("path",
-				mcp.Description("File containing the type"),
-			),
-			mcp.WithNumber("line",
-				mcp.Description("Line number (1-based)"),
-			),
-			mcp.WithNumber("column",
-				mcp.Description("Column position (1-based)"),
+
+BATCH REQUESTS (find supertypes for multiple types):
+[
+  {"path": "/src/models/User.ts", "line": 5, "column": 14},
+  {"path": "/src/models/Product.ts", "line": 8, "column": 7}
+]
+
+RETURNS:
+- Single: {"success": true, "data": [{"name": "BaseEntity", "kind": "Class", "location": "...", "preview": "..."}]}
+- Batch: [{"success": true, "data": [...]}, {"success": false, "error": "Type hierarchy not supported..."}]
+
+Note: May not be supported by all language servers`),
+			mcp.WithObject("args",
+				mcp.Description("Single location object or array of locations for batch operations"),
 			),
 		),
-		handleSupertype,
+		handleTool,
 	)
 
 	// Register subtype tool
@@ -225,20 +253,25 @@ EXAMPLE:
 		mcp.NewTool("subtype",
 			mcp.WithDescription(`Find implementations or subclasses of a type. Get location from symbols tool first.
 
-EXAMPLE:
+SINGLE REQUEST:
 {"path": "/src/base/Repository.ts", "line": 1, "column": 7}
-→ [{"name": "UserRepository", "kind": "Class", "path": "/src/repos/user.ts:5:7", "range": "5:7-5:21"}]`),
-			mcp.WithString("path",
-				mcp.Description("File containing the type"),
-			),
-			mcp.WithNumber("line",
-				mcp.Description("Line number (1-based)"),
-			),
-			mcp.WithNumber("column",
-				mcp.Description("Column position (1-based)"),
+
+BATCH REQUESTS (find subtypes for multiple types):
+[
+  {"path": "/src/base/Repository.ts", "line": 1, "column": 7},
+  {"path": "/src/base/Service.ts", "line": 3, "column": 10}
+]
+
+RETURNS:
+- Single: {"success": true, "data": [{"name": "UserRepository", "kind": "Class", "location": "...", "preview": "..."}]}
+- Batch: [{"success": true, "data": [...]}, {"success": false, "error": "Type hierarchy not supported..."}]
+
+Note: May not be supported by all language servers`),
+			mcp.WithObject("args",
+				mcp.Description("Single location object or array of locations for batch operations"),
 			),
 		),
-		handleSubtype,
+		handleTool,
 	)
 
 	// Start serving
@@ -248,7 +281,11 @@ EXAMPLE:
 	}
 }
 
-func handleOpen(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+// Generic handler for all tools
+func handleTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Get the tool name from request
+	toolName := request.Params.Name
+
 	// Get all arguments
 	args := request.GetArguments()
 
@@ -279,120 +316,62 @@ func handleOpen(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTool
 
 	// Create command
 	cmd := Command{
-		ID:   fmt.Sprintf("%d", time.Now().UnixNano()),
-		Tool: "open",
+		ID:   fmt.Sprintf("%s-%d", toolName, time.Now().UnixNano()),
+		Tool: toolName,
 		Args: argsJson,
 	}
 
 	// Send command and wait for response
-	log.Printf("[COMMAND SENT] open: %s", string(argsJson))
-	resp, err := writeCommand(windowId, cmd, 5*time.Second)
+	log.Printf("[COMMAND SENT] %s: %s", toolName, string(argsJson))
+	response, err := writeCommand(windowId, cmd, 30*time.Second)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute command: %v", err)
+		return nil, fmt.Errorf("failed to execute %s: %v", toolName, err)
 	}
 
-	// Check if command succeeded
-	if !resp.Success {
-		return nil, fmt.Errorf("command failed: %s", resp.Error)
-	}
-
-	// Return success
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			mcp.TextContent{
-				Type: "text",
-				Text: "Successfully opened items in VS Code",
-			},
-		},
-	}, nil
-}
-
-func handleSymbols(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return handleQueryType(ctx, request, "symbols")
-}
-
-func handleReferences(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return handleQueryType(ctx, request, "references")
-}
-
-func handleFileTypes(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return handleQueryType(ctx, request, "fileTypes")
-}
-
-func handleDiagnostics(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return handleQueryType(ctx, request, "diagnostics")
-}
-
-func handleDefinition(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return handleQueryType(ctx, request, "definition")
-}
-
-func handleSupertype(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return handleQueryType(ctx, request, "supertype")
-}
-
-func handleSubtype(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return handleQueryType(ctx, request, "subtype")
-}
-
-// Common handler for all query types
-func handleQueryType(ctx context.Context, request mcp.CallToolRequest, queryType string) (*mcp.CallToolResult, error) {
-	// Get the args argument
-	args := request.GetArguments()
-	argsArg, exists := args["args"]
-	if !exists {
-		return nil, fmt.Errorf("missing 'args' argument")
-	}
-
-	// Add the type field to the args
-	argsMap, ok := argsArg.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("args must be an object")
-	}
-	argsMap["type"] = queryType
-
-	// Marshal the args to JSON
-	argsJSON, err := json.Marshal(argsMap)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal args: %v", err)
-	}
-
-	// No specific window handling for queries - use any available window
-	windowId, err := getTargetWindow(nil)
-	if err != nil {
-		return nil, err
-	}
-
-	// Send command to extension
-	cmd := Command{
-		ID:   fmt.Sprintf("query-%d", time.Now().UnixNano()),
-		Tool: "query",
-		Args: argsJSON,
-	}
-
-	response, err := writeCommand(windowId, cmd, 5*time.Second)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute query: %v", err)
-	}
-
-	// Return the response directly
+	// Log the response
+	log.Printf("[RESPONSE RECEIVED] ID: %s, Success: %v", response.ID, response.Success)
 	if !response.Success {
+		log.Printf("[ERROR] %s", response.Error)
+	}
+
+	// Handle response based on success/failure
+	if !response.Success {
+		// Return error text directly
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				mcp.TextContent{
 					Type: "text",
-					Text: fmt.Sprintf("Query failed: %s", response.Error),
+					Text: response.Error,
 				},
 			},
 		}, nil
 	}
 
-	// Return the data directly
+	// Success case - check if data is a JSON string
+	dataStr := string(response.Data)
+	trimmed := strings.TrimSpace(dataStr)
+
+	if len(trimmed) > 0 && trimmed[0] == '"' {
+		// It's a JSON string - unmarshal and return raw
+		var str string
+		if err := json.Unmarshal(response.Data, &str); err == nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					mcp.TextContent{
+						Type: "text",
+						Text: str,
+					},
+				},
+			}, nil
+		}
+	}
+
+	// Not a string or failed to unmarshal - return JSON as-is
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			mcp.TextContent{
 				Type: "text",
-				Text: string(response.Data),
+				Text: dataStr,
 			},
 		},
 	}, nil
@@ -486,11 +465,7 @@ func getActiveWindows() (map[string]*WindowInfo, error) {
 	return windows, nil
 }
 
-// writeCommand writes a command and waits for a response.
-// Recommended timeout values:
-//   - 5s for quick operations (file open, navigation)
-//   - 30s for operations that might require user interaction
-//   - 60s for operations that might involve heavy computation
+// writeCommand writes a command and waits for a response with 30s timeout
 func writeCommand(windowId string, cmd Command, timeout time.Duration) (*CommandResponse, error) {
 	// Write the command
 	cmdFile := filepath.Join(vsClaudeDir, fmt.Sprintf("%s.in", windowId))
@@ -589,7 +564,6 @@ func writeCommand(windowId string, cmd Command, timeout time.Duration) (*Command
 				// Check if this is our response
 				if resp.ID == cmd.ID {
 					file.Close()
-					log.Printf("[RESPONSE RECEIVED] ID: %s, Success: %v", resp.ID, resp.Success)
 					return &resp, nil
 				}
 			}

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { CommandHandler } from './command-handler';
+import { CommandHandler } from '../command-handler';
 
 export class TestToolWebviewProvider {
 	private panel: vscode.WebviewPanel | undefined;
@@ -69,11 +69,11 @@ export class TestToolWebviewProvider {
 	private getWebviewContent(webview: vscode.Webview): string {
 		const logoUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'logo.png'));
 		const scriptUri = webview.asWebviewUri(
-			vscode.Uri.joinPath(this.context.extensionUri, 'out', 'test-tool-webview.content.js')
+			vscode.Uri.joinPath(this.context.extensionUri, 'out', 'views', 'test-tool-webview.content.js')
 		);
 
 		// Read the HTML template
-		const htmlPath = path.join(this.context.extensionPath, 'out', 'test-tool-webview.content.html');
+		const htmlPath = path.join(this.context.extensionPath, 'out', 'views', 'test-tool-webview.content.html');
 		let html = fs.readFileSync(htmlPath, 'utf8');
 
 		// Replace template variables

@@ -52,3 +52,4 @@ coverage/
 
 # VS Claude runtime files
 .vs-claude/
+mcp/test-output.txt

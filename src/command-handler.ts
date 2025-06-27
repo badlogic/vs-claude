@@ -1,7 +1,33 @@
 import { logger } from './logger';
-import { OpenHandler } from './open-handler';
-import { QueryHandler } from './query-handler';
+import { DefinitionTool } from './tools/definition-tool';
+import { DiagnosticsTool } from './tools/diagnostics-tool';
+import { FileTypesTool } from './tools/file-types-tool';
+import { OpenHandler } from './tools/open-tool';
+import { ReferencesTool } from './tools/references-tool';
+import { SubAndSupertypeTool } from './tools/sub-and-super-type-tool';
+import { SymbolsTool } from './tools/symbols-tool';
+import type {
+	DefinitionRequest,
+	DiagnosticsRequest,
+	FileTypesRequest,
+	OpenRequest,
+	ReferenceRequest,
+	SymbolsRequest,
+	TypeHierarchyRequest,
+} from './tools/types';
 
+// Discriminated union for typed commands
+export type TypedCommand =
+	| { id: string; tool: 'open'; args: OpenRequest[] }
+	| { id: string; tool: 'symbols'; args: SymbolsRequest[] }
+	| { id: string; tool: 'diagnostics'; args: DiagnosticsRequest[] }
+	| { id: string; tool: 'references'; args: ReferenceRequest[] }
+	| { id: string; tool: 'definition'; args: DefinitionRequest[] }
+	| { id: string; tool: 'supertype'; args: TypeHierarchyRequest[] }
+	| { id: string; tool: 'subtype'; args: TypeHierarchyRequest[] }
+	| { id: string; tool: 'fileTypes'; args: FileTypesRequest[] };
+
+// Raw command from MCP (before type validation)
 export interface Command {
 	id: string;
 	tool: string;
@@ -17,11 +43,48 @@ export interface CommandResponse {
 
 export class CommandHandler {
 	private openHandler: OpenHandler;
-	private queryHandler: QueryHandler;
+	private symbolsTool: SymbolsTool;
+	private diagnosticsTool: DiagnosticsTool;
+	private referencesTool: ReferencesTool;
+	private definitionTool: DefinitionTool;
+	private subAndSupertypeTool: SubAndSupertypeTool;
+	private fileTypesTool: FileTypesTool;
 
 	constructor() {
 		this.openHandler = new OpenHandler();
-		this.queryHandler = new QueryHandler();
+		this.symbolsTool = new SymbolsTool();
+		this.diagnosticsTool = new DiagnosticsTool();
+		this.referencesTool = new ReferencesTool();
+		this.definitionTool = new DefinitionTool();
+		this.subAndSupertypeTool = new SubAndSupertypeTool();
+		this.fileTypesTool = new FileTypesTool();
+	}
+
+	/**
+	 * Type guard to check if a command is properly typed
+	 */
+	private isTypedCommand(command: Command): command is TypedCommand {
+		return (
+			command.tool === 'open' ||
+			command.tool === 'symbols' ||
+			command.tool === 'diagnostics' ||
+			command.tool === 'references' ||
+			command.tool === 'definition' ||
+			command.tool === 'supertype' ||
+			command.tool === 'subtype' ||
+			command.tool === 'fileTypes'
+		);
+	}
+
+	/**
+	 * Helper to ensure args is an array
+	 */
+	private ensureArray<T>(args: unknown): T[] {
+		if (Array.isArray(args)) {
+			return args as T[];
+		}
+		// If it's a single item, wrap it in an array
+		return [args as T];
 	}
 
 	async executeCommand(command: Command): Promise<{ success: boolean; data?: unknown; error?: string }> {
@@ -30,28 +93,76 @@ export class CommandHandler {
 		logger.info('CommandHandler', 'Raw JSON input:', command);
 
 		try {
+			// Type-safe command handling
+			if (!this.isTypedCommand(command)) {
+				const error = `Unknown command: ${command.tool}`;
+				logger.warn('CommandHandler', error);
+				return { success: false, error };
+			}
+
+			// Cast to typed command and ensure args is an array
+			const typedCommand: TypedCommand = {
+				...command,
+				args: this.ensureArray(command.args),
+			} as TypedCommand;
+
 			let result: { success: boolean; data?: unknown; error?: string };
 
-			switch (command.tool) {
-				case 'open':
-					result = await this.openHandler.execute(
-						command.args as Parameters<typeof this.openHandler.execute>[0]
-					);
-					break;
-
-				case 'query': {
-					const queryResult = await this.queryHandler.execute(
-						command.args as Parameters<typeof this.queryHandler.execute>[0]
-					);
-					// Convert QueryResponse[] to CommandResponse format
-					result = { success: true, data: queryResult };
+			switch (typedCommand.tool) {
+				case 'open': {
+					// OpenHandler already accepts an array
+					result = await this.openHandler.execute(typedCommand.args);
 					break;
 				}
 
-				default: {
-					const error = `Unknown command: ${command.tool}`;
-					logger.warn('CommandHandler', error);
-					result = { success: false, error };
+				case 'symbols': {
+					logger.info('CommandHandler', `Symbols args: ${JSON.stringify(typedCommand.args)}`);
+					const results = await Promise.all(typedCommand.args.map((arg) => this.symbolsTool.execute(arg)));
+					// If single request, return single result
+					result = typedCommand.args.length === 1 ? results[0] : { success: true, data: results };
+					break;
+				}
+
+				case 'diagnostics': {
+					const results = await Promise.all(
+						typedCommand.args.map((arg) => this.diagnosticsTool.execute(arg))
+					);
+					result = typedCommand.args.length === 1 ? results[0] : { success: true, data: results };
+					break;
+				}
+
+				case 'references': {
+					const results = await Promise.all(typedCommand.args.map((arg) => this.referencesTool.execute(arg)));
+					result = typedCommand.args.length === 1 ? results[0] : { success: true, data: results };
+					break;
+				}
+
+				case 'definition': {
+					const results = await Promise.all(typedCommand.args.map((arg) => this.definitionTool.execute(arg)));
+					result = typedCommand.args.length === 1 ? results[0] : { success: true, data: results };
+					break;
+				}
+
+				case 'supertype': {
+					const results = await Promise.all(
+						typedCommand.args.map((arg) => this.subAndSupertypeTool.execute(arg))
+					);
+					result = typedCommand.args.length === 1 ? results[0] : { success: true, data: results };
+					break;
+				}
+
+				case 'subtype': {
+					const results = await Promise.all(
+						typedCommand.args.map((arg) => this.subAndSupertypeTool.execute(arg))
+					);
+					result = typedCommand.args.length === 1 ? results[0] : { success: true, data: results };
+					break;
+				}
+
+				case 'fileTypes': {
+					const results = await Promise.all(typedCommand.args.map((arg) => this.fileTypesTool.execute(arg)));
+					result = typedCommand.args.length === 1 ? results[0] : { success: true, data: results };
+					break;
 				}
 			}
 

@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
-import { LogViewerWebviewProvider } from './log-viewer-webview';
 import { logger } from './logger';
 import { SetupManager } from './setup';
-import { TestToolWebviewProvider } from './test-tool-webview';
+import { LogViewerWebviewProvider } from './views/log-viewer-webview';
+import { TestToolWebviewProvider } from './views/test-tool-webview';
 import { WindowManager } from './window-manager';
 
 let windowManager: WindowManager;

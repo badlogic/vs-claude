@@ -179,7 +179,15 @@ export class WindowManager {
 
 						for (const line of completeLines) {
 							try {
-								const command: Command = JSON.parse(line);
+								const rawCommand = JSON.parse(line);
+								// Parse the args field if it's a string (from Go's json.RawMessage)
+								const command: Command = {
+									...rawCommand,
+									args:
+										typeof rawCommand.args === 'string'
+											? JSON.parse(rawCommand.args)
+											: rawCommand.args,
+								};
 								logger.command(command.tool);
 
 								// Execute the command
