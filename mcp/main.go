@@ -98,12 +98,15 @@ WHEN TO USE: Choose this over grep/ripgrep when you need to:
 - Find all usages of a symbol
 - Navigate to definitions
 - Understand type hierarchies
+- Get file overview: Use fileTypes to see ALL types & top-level functions at once
 
 KEY CONCEPT - Hierarchical Query Syntax:
-The number of dots controls result depth. This is NOT like file paths - each dot means "show me the children":
+Use dots (.) for hierarchy, NOT language-specific delimiters (:: or ->).
+The number of dots controls result depth - each dot means "show me the children":
 - "Animation" → just Animation symbol (no children)
 - "Animation.*" → Animation + its direct children
 - "Animation.get*" → Animation + children starting with "get"
+- "Skeleton.{get,set}*" → Skeleton + getters/setters (NOT "Skeleton::get*")
 
 The 'kinds' filter applies to what matches your pattern, not the entire tree.
 
@@ -154,12 +157,13 @@ QUERY TYPES:
    {"type": "diagnostics", "path": "/src/app.ts"}  // specific file
 
 7. fileTypes - Get all types and top-level functions in a file
+   BEST FOR FILE OVERVIEW - Shows complete type structure at a glance!
    Required: path
 
    {"type": "fileTypes", "path": "/src/models/user.ts"}
 
-   Returns all classes, interfaces, structs, enums (including nested ones) and top-level functions.
-   Useful for understanding file structure and available types.
+   Returns ALL classes, interfaces, structs, enums (including nested) + top-level functions.
+   Perfect for understanding what's in a file without multiple queries.
 
 RESPONSE: Always returns array of [{result: ...}] or [{error: ...}]
 For symbols: {name, kind, location, children?}
@@ -179,8 +183,9 @@ Check before refactoring:
 {"type": "references", "path": "/path", "line": 42}  // check usage
 
 File overview:
-{"type": "symbols", "path": "/src/controller.ts", "query": "*"}  // top-level only
-{"type": "symbols", "path": "/src/controller.ts", "query": "*.*"}  // with members
+{"type": "fileTypes", "path": "/src/controller.ts"}  // BEST: all types + functions at once
+{"type": "symbols", "path": "/src/controller.ts", "query": "*"}  // alternative: top-level only
+{"type": "symbols", "path": "/src/controller.ts", "query": "*.*"}  // alternative: with members
 
 TIPS:
 - Always use hierarchical queries for depth control
