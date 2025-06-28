@@ -29,6 +29,7 @@ VS Claude provides powerful tools for AI assistants to interact with VS Code, fe
    - Supports wildcards (*, ?, [abc], {a,b,c}, **) and hierarchical queries (Class.method)
    - Filter by symbol types (class, method, function, etc.)
    - Search in specific files, folders, or entire workspace
+   - Returns symbols with preview of the code line where they're defined
    - **Batch support**: Execute multiple symbol searches in parallel
 
 3. **references** - Find all usages of a symbol at a specific location
@@ -49,7 +50,7 @@ VS Claude provides powerful tools for AI assistants to interact with VS Code, fe
 6. **allTypesInFile** - Get all types and top-level functions in a file
    - Extract classes, interfaces, structs, enums
    - Include top-level functions
-   - Returns complete type hierarchy with members
+   - Returns complete type hierarchy with members and code previews
    - **Batch support**: Analyze multiple files
 
 7. **supertype** - Find what a type extends/implements
@@ -131,6 +132,7 @@ VS Claude consists of two components:
 - `VS Claude: Uninstall MCP` - Remove the MCP server from Claude
 - `VS Claude: Test Query Tool` - Open interactive query tester with all tools
 - `VS Claude: Show Logs` - View real-time extension logs with colored output
+- `VS Claude: Initialize Language Servers` - Force initialize all language servers
 
 ### MCP Server (Go)
 - Simple proxy that forwards tool calls from MCP clients to VS Code
