@@ -12,6 +12,12 @@ export class SetupManager {
 	constructor(private context: vscode.ExtensionContext) {}
 
 	async checkAndInstallMCP(): Promise<void> {
+		// Skip MCP installation check during tests
+		if (process.env.VSCODE_TEST) {
+			logger.info('SetupManager', 'Skipping MCP installation check during tests');
+			return;
+		}
+
 		// Quietly check installation
 
 		const mcpServerPath = this.getMCPServerPath();

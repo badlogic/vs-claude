@@ -26,6 +26,25 @@
                 "${workspaceFolder}/build/extension/**/*.js"
             ],
             "preLaunchTask": "npm: watch"
+        },
+        {
+            "name": "Extension Tests",
+            "type": "extensionHost",
+            "request": "launch",
+            "runtimeExecutable": "${execPath}",
+            "args": [
+                "--profile=vs-claude-test",
+                "--extensionDevelopmentPath=${workspaceFolder}",
+                "--extensionTestsPath=${workspaceFolder}/build/test/runTest",
+                "${workspaceFolder}/test/test-workspace"
+            ],
+            "outFiles": [
+                "${workspaceFolder}/build/**/*.js"
+            ],
+            "preLaunchTask": "npm: test:build",
+            "env": {
+                "CI": "true"
+            }
         }
     ]
 }

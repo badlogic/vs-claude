@@ -40,6 +40,17 @@
         "reveal": "never"
       },
       "group": "build"
+    },
+    {
+      "label": "npm: test:build",
+      "type": "shell",
+      "command": "npm run build && tsc -p ./tsconfig.test.json && cp -r test/test-workspace build/extension/test/ && cp -r scripts build/ && cp logo.png build/extension/ 2>/dev/null || true && node test/setup-test-workspace.js",
+      "problemMatcher": "$tsc",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "dedicated",
+        "showReuseMessage": false
+      }
     }
   ]
 }

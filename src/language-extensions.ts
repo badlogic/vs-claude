@@ -71,9 +71,6 @@ export class LanguageExtensionManager {
 			const extensionUri = vscode.Uri.parse(`vscode:extension/${extension.id}`);
 			await vscode.commands.executeCommand('vscode.open', extensionUri);
 
-			// Wait a bit for the extension to be installed
-			await new Promise((resolve) => setTimeout(resolve, 2000));
-
 			logger.info('LanguageExtensions', `Successfully installed ${extension.name}`);
 		} catch (error) {
 			logger.error('LanguageExtensions', `Failed to install ${extension.name}`, error);

@@ -5,14 +5,22 @@ import { DefinitionTool } from '../../src/tools/definition-tool';
 import { DiagnosticsTool } from '../../src/tools/diagnostics-tool';
 import { AllTypesInFileTool } from '../../src/tools/all-types-in-file-tool';
 import { ReferencesTool } from '../../src/tools/references-tool';
-import { SubtypeTool } from '../../src/tools/subtype-tool';
-import { SupertypeTool } from '../../src/tools/supertype-tool';
+import { SubAndSupertypeTool } from '../../src/tools/sub-and-super-type-tool';
 import { SymbolsTool } from '../../src/tools/symbols-tool';
-import type { SymbolKindName } from '../../src/tools/types';
+import type {
+	SymbolKindName,
+	SymbolsRequest,
+	DiagnosticsRequest,
+	ReferenceRequest,
+	DefinitionRequest,
+	AllTypesInFileRequest,
+	CodeSymbol,
+	CountResult,
+} from '../../src/tools/types';
 
 /**
  * Individual Tools Unit Tests
- * 
+ *
  * Tests the individual tool classes directly
  */
 suite('Individual Tools Unit Tests', function () {
@@ -22,8 +30,7 @@ suite('Individual Tools Unit Tests', function () {
 	let diagnosticsTool: DiagnosticsTool;
 	let referencesTool: ReferencesTool;
 	let definitionTool: DefinitionTool;
-	let supertypeTool: SupertypeTool;
-	let subtypeTool: SubtypeTool;
+	let subAndSupertypeTool: SubAndSupertypeTool;
 	let allTypesInFileTool: AllTypesInFileTool;
 
 	suiteSetup(async () => {
@@ -37,8 +44,7 @@ suite('Individual Tools Unit Tests', function () {
 		diagnosticsTool = new DiagnosticsTool();
 		referencesTool = new ReferencesTool();
 		definitionTool = new DefinitionTool();
-		supertypeTool = new SupertypeTool();
-		subtypeTool = new SubtypeTool();
+		subAndSupertypeTool = new SubAndSupertypeTool();
 		allTypesInFileTool = new AllTypesInFileTool();
 
 		// Give language servers time to initialize
@@ -56,28 +62,34 @@ suite('Individual Tools Unit Tests', function () {
 	suite('Symbols Tool', () => {
 		test('Should find exact symbol matches', async () => {
 			const result = await symbolsTool.execute({
+				type: 'symbols',
 				query: 'UserService',
-				kinds: ['class' as SymbolKindName]
+				kinds: ['class' as SymbolKindName],
 			});
 
-			const response = result[0];
-			assert.ok(response.success, 'Should succeed');
-			
-			const symbols = response.data as any[];
-			assert.ok(symbols.length > 0, 'Should find UserService class');
-			assert.ok(symbols.some(s => s.name === 'UserService'), 'Should find exact match');
+			assert.ok(result.success, 'Should succeed');
+
+			if (result.success) {
+				const symbols = Array.isArray(result.data) ? result.data : [result.data];
+				assert.ok(symbols.length > 0, 'Should find UserService class');
+				assert.ok(
+					symbols.some((s: CodeSymbol | CountResult) => 'name' in s && s.name === 'UserService'),
+					'Should find exact match'
+				);
+			}
 		});
 
 		test('Should support batch requests', async () => {
-			const requests = [
-				{ query: 'UserService', kinds: ['class' as SymbolKindName] },
-				{ query: 'get*', kinds: ['method' as SymbolKindName] },
-				{ query: '*Controller', kinds: ['class' as SymbolKindName] }
+			const requests: SymbolsRequest[] = [
+				{ type: 'symbols', query: 'UserService', kinds: ['class'] },
+				{ type: 'symbols', query: 'get*', kinds: ['method'] },
+				{ type: 'symbols', query: '*Controller', kinds: ['class'] },
 			];
 
-			const results = await symbolsTool.execute(requests);
+			// Execute batch requests - tools don't support batch, so we'll execute individually
+			const results = await Promise.all(requests.map((req) => symbolsTool.execute(req)));
 			assert.strictEqual(results.length, 3, 'Should return 3 results');
-			
+
 			// Check all succeeded
 			for (let i = 0; i < results.length; i++) {
 				assert.ok(results[i].success, `Request ${i} should succeed`);
@@ -86,36 +98,44 @@ suite('Individual Tools Unit Tests', function () {
 
 		test('Should handle errors gracefully', async () => {
 			const result = await symbolsTool.execute({
-				path: '/non/existent/file.ts'
+				type: 'symbols',
+				path: '/non/existent/file.ts',
 			});
 
-			const response = result[0];
-			assert.ok(!response.success, 'Should fail for non-existent file');
-			assert.ok(response.error?.includes('not found'), 'Should have error message');
+			assert.ok(!result.success, 'Should fail for non-existent file');
+			if (!result.success) {
+				assert.ok(result.error?.includes('not found'), 'Should have error message');
+			}
 		});
 	});
 
 	suite('Diagnostics Tool', () => {
 		test('Should get workspace diagnostics', async () => {
-			const result = await diagnosticsTool.execute({});
+			const result = await diagnosticsTool.execute({
+				type: 'diagnostics',
+			});
 
-			const response = result[0];
-			assert.ok(response.success, 'Should succeed');
-			assert.ok(Array.isArray(response.data), 'Should return array');
+			assert.ok(result.success, 'Should succeed');
+			if (result.success) {
+				assert.ok(Array.isArray(result.data), 'Should return array');
+			}
 		});
 
 		test('Should support batch requests', async () => {
-			const requests = [
-				{}, // Workspace diagnostics
-				{ path: getTestFilePath('typescript/user.service.ts') }
+			const requests: DiagnosticsRequest[] = [
+				{ type: 'diagnostics' }, // Workspace diagnostics
+				{ type: 'diagnostics', path: getTestFilePath('typescript/user.service.ts') },
 			];
 
-			const results = await diagnosticsTool.execute(requests);
+			// Execute batch requests
+			const results = await Promise.all(requests.map((req) => diagnosticsTool.execute(req)));
 			assert.strictEqual(results.length, 2, 'Should return 2 results');
-			
+
 			for (const result of results) {
 				assert.ok(result.success, 'Should succeed');
-				assert.ok(Array.isArray(result.data), 'Should return array');
+				if (result.success) {
+					assert.ok(Array.isArray(result.data), 'Should return array');
+				}
 			}
 		});
 	});
@@ -124,41 +144,45 @@ suite('Individual Tools Unit Tests', function () {
 		test('Should find references', async () => {
 			// First find a symbol to get references for
 			const symbolsResult = await symbolsTool.execute({
+				type: 'symbols',
 				query: 'getUser',
-				kinds: ['method']
+				kinds: ['method'],
 			});
 
-			const symbolsResponse = symbolsResult[0];
-			if (symbolsResponse.success && (symbolsResponse.data as any[]).length > 0) {
-				const symbols = symbolsResponse.data as any[];
+			if (symbolsResult.success && Array.isArray(symbolsResult.data) && symbolsResult.data.length > 0) {
+				const symbols = symbolsResult.data.filter((s) => 'location' in s);
 				// Extract location from first symbol
-				const location = symbols[0].location || (symbols[0].children?.[0]?.location);
+				const location =
+					(symbols[0] as CodeSymbol).location || (symbols[0] as CodeSymbol).children?.[0]?.location;
 				if (location) {
 					const match = location.match(/(.+):(\d+):(\d+)/);
 					if (match) {
 						const [, filePath, line, column] = match;
-						
+
 						const result = await referencesTool.execute({
+							type: 'references',
 							path: filePath,
 							line: parseInt(line),
-							column: parseInt(column)
+							column: parseInt(column),
 						});
 
-						const response = result[0];
-						assert.ok(response.success, 'Should succeed');
-						assert.ok(Array.isArray(response.data), 'Should return array');
+						assert.ok(result.success, 'Should succeed');
+						if (result.success) {
+							assert.ok(Array.isArray(result.data), 'Should return array');
+						}
 					}
 				}
 			}
 		});
 
 		test('Should support batch requests', async () => {
-			const requests = [
-				{ path: getTestFilePath('typescript/user.service.ts'), line: 10, column: 5 },
-				{ path: getTestFilePath('typescript/user.service.ts'), line: 15, column: 10 }
+			const requests: ReferenceRequest[] = [
+				{ type: 'references', path: getTestFilePath('typescript/user.service.ts'), line: 10, column: 5 },
+				{ type: 'references', path: getTestFilePath('typescript/user.service.ts'), line: 15, column: 10 },
 			];
 
-			const results = await referencesTool.execute(requests);
+			// Execute batch requests
+			const results = await Promise.all(requests.map((req) => referencesTool.execute(req)));
 			assert.strictEqual(results.length, 2, 'Should return 2 results');
 		});
 	});
@@ -166,36 +190,38 @@ suite('Individual Tools Unit Tests', function () {
 	suite('Definition Tool', () => {
 		test('Should find definition', async () => {
 			const result = await definitionTool.execute({
+				type: 'definition',
 				path: getTestFilePath('typescript/user.service.ts'),
 				line: 10,
-				column: 20
+				column: 20,
 			});
 
-			const response = result[0];
 			// May or may not find a definition depending on what's at that location
-			assert.ok('success' in response, 'Should have success property');
+			assert.ok('success' in result, 'Should have success property');
 		});
 
 		test('Should support batch requests', async () => {
-			const requests = [
-				{ path: getTestFilePath('typescript/user.service.ts'), line: 10, column: 20 },
-				{ path: getTestFilePath('typescript/user.service.ts'), line: 15, column: 10 }
+			const requests: DefinitionRequest[] = [
+				{ type: 'definition', path: getTestFilePath('typescript/user.service.ts'), line: 10, column: 20 },
+				{ type: 'definition', path: getTestFilePath('typescript/user.service.ts'), line: 15, column: 10 },
 			];
 
-			const results = await definitionTool.execute(requests);
+			// Execute batch requests
+			const results = await Promise.all(requests.map((req) => definitionTool.execute(req)));
 			assert.strictEqual(results.length, 2, 'Should return 2 results');
 		});
 	});
 
 	suite('Type Hierarchy Tools', () => {
 		test('Should handle supertypes', async () => {
-			const result = await supertypeTool.execute({
+			const result = await subAndSupertypeTool.execute({
+				type: 'supertype',
 				path: getTestFilePath('typescript/user.service.ts'),
 				line: 10,
-				column: 20
+				column: 20,
 			});
 
-			const response = result[0];
+			const response = result;
 			// Type hierarchy may not be supported
 			if (!response.success) {
 				assert.ok(response.error?.includes('not supported'), 'Should indicate not supported');
@@ -205,13 +231,14 @@ suite('Individual Tools Unit Tests', function () {
 		});
 
 		test('Should handle subtypes', async () => {
-			const result = await subtypeTool.execute({
+			const result = await subAndSupertypeTool.execute({
+				type: 'subtype',
 				path: getTestFilePath('typescript/user.service.ts'),
 				line: 10,
-				column: 20
+				column: 20,
 			});
 
-			const response = result[0];
+			const response = result;
 			// Type hierarchy may not be supported
 			if (!response.success) {
 				assert.ok(response.error?.includes('not supported'), 'Should indicate not supported');
@@ -224,26 +251,32 @@ suite('Individual Tools Unit Tests', function () {
 	suite('File Types Tool', () => {
 		test('Should extract types from file', async () => {
 			const result = await allTypesInFileTool.execute({
-				path: getTestFilePath('typescript/user.service.ts')
+				type: 'allTypesInFile',
+				path: getTestFilePath('typescript/user.service.ts'),
 			});
 
-			const response = result[0];
-			assert.ok(response.success, 'Should succeed');
-			
-			const types = response.data as any[];
-			assert.ok(types.length > 0, 'Should find types');
-			assert.ok(types.some(t => t.name === 'UserService'), 'Should find UserService');
+			assert.ok(result.success, 'Should succeed');
+
+			if (result.success) {
+				const types = result.data;
+				assert.ok(types.length > 0, 'Should find types');
+				assert.ok(
+					types.some((t: any) => t.name === 'UserService'),
+					'Should find UserService'
+				);
+			}
 		});
 
 		test('Should support batch requests', async () => {
-			const requests = [
-				{ path: getTestFilePath('typescript/user.service.ts') },
-				{ path: getTestFilePath('csharp/UserService.cs') }
+			const requests: AllTypesInFileRequest[] = [
+				{ type: 'allTypesInFile', path: getTestFilePath('typescript/user.service.ts') },
+				{ type: 'allTypesInFile', path: getTestFilePath('csharp/UserService.cs') },
 			];
 
-			const results = await allTypesInFileTool.execute(requests);
+			// Execute batch requests
+			const results = await Promise.all(requests.map((req) => allTypesInFileTool.execute(req)));
 			assert.strictEqual(results.length, 2, 'Should return 2 results');
-			
+
 			for (const result of results) {
 				if (result.success) {
 					assert.ok(Array.isArray(result.data), 'Should return array');

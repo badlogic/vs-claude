@@ -14,5 +14,5 @@
     "src/**/*",
     "test/**/*"
   ],
-  "exclude": ["node_modules", ".vscode-test", "vscode", "mcp", "test/test-workspace"]
+  "exclude": ["node_modules", ".vscode-test", "vscode", "mcp", "test/test-workspace", "src/views"]
 }

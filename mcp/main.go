@@ -291,7 +291,12 @@ Note: May not be supported by all language servers`),
 	// Start serving
 	log.Println("Starting MCP server...")
 	if err := server.ServeStdio(mcpServer); err != nil {
-		log.Fatalf("Server error: %v", err)
+		// Check if it's a context canceled error (expected when client closes connection)
+		if err.Error() == "context canceled" {
+			log.Println("MCP server shutdown (client disconnected)")
+		} else {
+			log.Fatalf("Server error: %v", err)
+		}
 	}
 }
 

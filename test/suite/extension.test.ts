@@ -11,28 +11,13 @@ suite('Extension Test Suite', () => {
 		// Increase timeout for suite setup
 		this.timeout(60000);
 
-		console.log('Starting extension test suite setup...');
-		
 		// Get the extension
 		extension = vscode.extensions.getExtension('vs-claude.vs-claude');
-		console.log('Extension found:', !!extension);
 		assert.ok(extension, 'Extension should be present');
 
 		// Wait for extension to activate
 		if (extension && !extension.isActive) {
-			console.log('Activating extension...');
 			await extension.activate();
-			console.log('Extension activated');
-			// Give it more time to fully initialize
-			await new Promise((resolve) => setTimeout(resolve, 2000));
-		}
-		
-		// Check if VS Claude directory exists
-		const vsClaudeDir = path.join(os.homedir(), '.vs-claude');
-		console.log('VS Claude directory exists:', fs.existsSync(vsClaudeDir));
-		if (fs.existsSync(vsClaudeDir)) {
-			const files = fs.readdirSync(vsClaudeDir);
-			console.log('Files in VS Claude directory:', files);
 		}
 	});
 
@@ -55,8 +40,7 @@ suite('Extension Test Suite', () => {
 	test('VS Claude directory should be created', async function () {
 		this.timeout(10000);
 
-		// Wait a bit for the extension to fully initialize
-		await new Promise((resolve) => setTimeout(resolve, 500));
+		// Check immediately - extension should already be initialized
 
 		const vsClaudeDir = path.join(os.homedir(), '.vs-claude');
 		assert.ok(fs.existsSync(vsClaudeDir), 'VS Claude directory should exist');

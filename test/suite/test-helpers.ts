@@ -46,7 +46,6 @@ export class MCPClient {
 
 		if (newestFile) {
 			const windowId = newestFile.replace('.meta.json', '');
-			console.log('Found test window ID:', windowId);
 			return windowId;
 		}
 
@@ -125,10 +124,16 @@ export class MCPClient {
 			// Success response
 			return { success: true, data: response.content[0].text };
 		}
+		if (response?.content?.[0]?.text === '') {
+			// Empty success response (e.g., for open tool)
+			return { success: true, data: '' };
+		}
 		if (response?.error) {
 			// Error response
 			return { success: false, error: response.error };
 		}
+		// Unknown format - log it
+		console.error('Unknown MCP response format:', JSON.stringify(response));
 		return { success: false, error: 'Unknown response format' };
 	}
 
@@ -160,24 +165,11 @@ export class E2ETestSetup {
 			E2ETestSetup.setupCount++;
 			return E2ETestSetup.mcpClient;
 		}
-		// Ensure we have a workspace
-		console.log('Workspace folders:', vscode.workspace.workspaceFolders);
-		console.log('Workspace name:', vscode.workspace.name);
-		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-		if (!workspaceFolder) {
-			// For test purposes, we'll continue without a workspace
-			console.warn('No workspace folder found, continuing without one');
-		} else {
-			console.log('Test workspace:', workspaceFolder.uri.fsPath);
-		}
 
 		// Wait for extension to be fully activated
 		const extension = vscode.extensions.getExtension('vs-claude.vs-claude');
 		assert.ok(extension, 'Extension not found');
 		await extension.activate();
-
-		// Give VS Code more time to create window metadata
-		await new Promise((resolve) => setTimeout(resolve, 3000));
 
 		// Start the MCP server
 		const platform = os.platform();
@@ -192,9 +184,9 @@ export class E2ETestSetup {
 			binaryName += 'windows-amd64.exe';
 		}
 
-		// The MCP server is in the extension's bin directory, not the test workspace
+		// The MCP server is in the extension's mcp directory, not the test workspace
 		const extensionPath = path.resolve(__dirname, '../../..');
-		const mcpServerPath = path.join(extensionPath, 'bin', binaryName);
+		const mcpServerPath = path.join(extensionPath, 'mcp', binaryName);
 		assert.ok(fs.existsSync(mcpServerPath), `MCP server binary not found at ${mcpServerPath}`);
 
 		E2ETestSetup.mcpServer = spawn(mcpServerPath);
@@ -209,7 +201,7 @@ export class E2ETestSetup {
 
 	static teardown(): void {
 		E2ETestSetup.setupCount--;
-		
+
 		// Only actually teardown when all suites are done
 		if (E2ETestSetup.setupCount === 0) {
 			if (E2ETestSetup.mcpClient) {

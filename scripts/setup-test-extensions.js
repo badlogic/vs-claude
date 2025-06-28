@@ -19,7 +19,16 @@ const requiredExtensions = [
 async function main() {
     console.log('Setting up test extensions...');
     
-    const testDir = path.resolve(__dirname, '..', '.vscode-test');
+    // Find the project root - handle both original location and build directory
+    let projectRoot;
+    if (__dirname.includes('build/scripts')) {
+        // Running from build directory
+        projectRoot = path.resolve(__dirname, '../..');
+    } else {
+        // Running from original location
+        projectRoot = path.resolve(__dirname, '..');
+    }
+    const testDir = path.join(projectRoot, '.vscode-test');
     const profileDir = path.join(testDir, 'profile');
     const extensionsDir = path.join(testDir, 'extensions');
     
@@ -35,27 +44,35 @@ async function main() {
     }
     
     // Check if extensions are already installed
+    let missingExtensions = requiredExtensions;
     try {
+        console.log(`Checking extensions in: ${extensionsDir}`);
         const installedOutput = execSync(
             `code --user-data-dir="${profileDir}" --extensions-dir="${extensionsDir}" --list-extensions`,
-            { encoding: 'utf8' }
+            { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
         );
-        const installedExtensions = installedOutput.trim().split('\n').filter(e => e);
+        const installedExtensions = installedOutput.trim().split('\n').filter(e => e).map(e => e.toLowerCase());
         
-        // Skip if all extensions are already installed
-        const missingExtensions = requiredExtensions.filter(ext => !installedExtensions.includes(ext));
+        console.log(`Found ${installedExtensions.length} installed extensions:`, installedExtensions);
+        
+        // Find missing extensions (case-insensitive comparison)
+        missingExtensions = requiredExtensions.filter(ext => 
+            !installedExtensions.includes(ext.toLowerCase())
+        );
+        
         if (missingExtensions.length === 0) {
             console.log('All required extensions are already installed');
             return;
         }
         
-        console.log(`Installing ${missingExtensions.length} missing extensions...`);
+        console.log(`Installing ${missingExtensions.length} missing extensions: ${missingExtensions.join(', ')}`);
     } catch (error) {
+        console.log('Could not check installed extensions:', error.message);
         console.log('Installing all extensions...');
     }
     
-    // Install extensions with proper error handling
-    for (const ext of requiredExtensions) {
+    // Install only missing extensions with proper error handling
+    for (const ext of missingExtensions) {
         try {
             console.log(`Installing ${ext}...`);
             execSync(

@@ -26,24 +26,27 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	await windowManager.initialize();
 
-	// Check and install language extensions in development mode
-	if (context.extensionMode === vscode.ExtensionMode.Development) {
+	// Check and install language extensions in development mode (but not in tests)
+	if (context.extensionMode === vscode.ExtensionMode.Development && !process.env.VSCODE_TEST) {
 		languageExtensionManager.checkAndInstallExtensions().catch((error) => {
 			logger.error('Extension', 'Failed to check/install language extensions', error);
 		});
 	}
 
 	// Initialize LSPs after a delay to ensure extensions are loaded
-	setTimeout(async () => {
-		try {
-			await lspInitializer.initializeAllLSPs();
-		} catch (error) {
-			logger.error('Extension', 'Failed to initialize LSPs', error);
-		}
-	}, 5000); // Wait 5 seconds after activation
+	// Skip LSP initialization during tests to avoid timeouts
+	if (!process.env.VSCODE_TEST) {
+		setTimeout(async () => {
+			try {
+				await lspInitializer.initializeAllLSPs();
+			} catch (error) {
+				logger.error('Extension', 'Failed to initialize LSPs', error);
+			}
+		}, 5000); // Wait 5 seconds after activation
+	}
 
-	// Restore previously open panels in development mode
-	if (context.extensionMode === vscode.ExtensionMode.Development) {
+	// Restore previously open panels in development mode (but not in tests)
+	if (context.extensionMode === vscode.ExtensionMode.Development && !process.env.VSCODE_TEST) {
 		const openPanels = context.globalState.get<string[]>('openPanels', []);
 		if (openPanels.includes('testTool')) {
 			testToolProvider.show();
