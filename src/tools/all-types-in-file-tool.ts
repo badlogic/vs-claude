@@ -21,6 +21,9 @@ export class AllTypesInFileTool {
 				return { success: true, data: [] };
 			}
 
+			// Open the document to get preview lines
+			const document = await vscode.workspace.openTextDocument(uri);
+
 			const results: CodeSymbol[] = [];
 
 			// Extract all types (classes, interfaces, structs, enums) and top-level functions
@@ -43,9 +46,17 @@ export class AllTypesInFileTool {
 							location: `${request.path}:${this.formatRange(combinedRange)}`,
 						};
 
+						// Add preview
+						try {
+							const line = document.lineAt(symbol.selectionRange.start.line);
+							sym.preview = line.text.trim();
+						} catch (_e) {
+							// Line might be out of bounds
+						}
+
 						// For types, include their members
 						if (isType && symbol.children && symbol.children.length > 0) {
-							sym.children = this.extractMembers(symbol.children);
+							sym.children = this.extractMembers(symbol.children, document);
 						}
 
 						results.push(sym);
@@ -68,7 +79,7 @@ export class AllTypesInFileTool {
 		}
 	}
 
-	private extractMembers(symbols: vscode.DocumentSymbol[]): CodeSymbol[] {
+	private extractMembers(symbols: vscode.DocumentSymbol[], document: vscode.TextDocument): CodeSymbol[] {
 		return symbols.map((symbol) => {
 			const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
 			const sym: CodeSymbol = {
@@ -77,8 +88,16 @@ export class AllTypesInFileTool {
 				location: this.formatRange(combinedRange),
 			};
 
+			// Add preview
+			try {
+				const line = document.lineAt(symbol.selectionRange.start.line);
+				sym.preview = line.text.trim();
+			} catch (_e) {
+				// Line might be out of bounds
+			}
+
 			if (symbol.children && symbol.children.length > 0) {
-				sym.children = this.extractMembers(symbol.children);
+				sym.children = this.extractMembers(symbol.children, document);
 			}
 
 			return sym;

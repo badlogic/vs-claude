@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const testWorkspacePath = path.join(__dirname, '../out/test/test-workspace');
+const testWorkspacePath = path.join(__dirname, '../build/extension/test/test-workspace');
 
 // Ensure test workspace exists
 if (!fs.existsSync(testWorkspacePath)) {

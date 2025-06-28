@@ -23,6 +23,7 @@ export interface CodeSymbol {
 	name: string;
 	kind: string;
 	location: string;
+	preview?: string;
 	children?: CodeSymbol[];
 }
 

@@ -25,7 +25,14 @@
     - Whitelist allowed commands?
     - Working directory handling
     - Environment variable handling
-  - [ ] Output handling:
-    - Stream output back to Claude?
-    - Handle long-running commands
-    - Error handling
+
+## Random stuff
+  - [ ] e2e tests for all tools through MCP server
+  - [ ] Typed tool definition parameters, not "WithObject("args") in main.go
+  - [x] Return preview for symbols (name may or may not include symbol signature, preview more likely to include full signature)
+  - [ ] Add depth operator for symbols tool (e.g., "Class.**" to get all descendants regardless of depth, similar to allTypesInFile behavior)
+  - [ ] Include doc strings above a symbol? Requires manual parsing per language (or just parse any type of comment above a symbol and assume it's doc string)
+  - [ ] See how/if we can get variable info for methods/functions
+  - [ ] Evluate differences in functionality across LSP servers for all supported languages
+  - [ ] Think about how we could test Claude using our shit
+  - [ ] Document how to instruct Claude to always use the tool. Tool definitions are not enough. Users need to add to Claude.md or manually prompt accordingly depending on task

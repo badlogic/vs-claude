@@ -1,0 +1,22 @@
+[
+  {
+    "directory": "${workspaceFolder}",
+    "command": "gcc -c src/c/calculator.c -o calculator.o",
+    "file": "src/c/calculator.c"
+  },
+  {
+    "directory": "${workspaceFolder}",
+    "command": "gcc -c src/c/calculator.h",
+    "file": "src/c/calculator.h"
+  },
+  {
+    "directory": "${workspaceFolder}",
+    "command": "g++ -std=c++17 -c src/cpp/shapes.cpp -o shapes.o",
+    "file": "src/cpp/shapes.cpp"
+  },
+  {
+    "directory": "${workspaceFolder}",
+    "command": "g++ -std=c++17 -c src/cpp/shapes.h",
+    "file": "src/cpp/shapes.h"
+  }
+]

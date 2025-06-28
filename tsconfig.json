@@ -2,7 +2,7 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "es2020",
-    "outDir": "out",
+    "outDir": "build/extension",
     "lib": ["es2020"],
     "sourceMap": true,
     "rootDir": "src",
@@ -10,5 +10,5 @@
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "exclude": ["node_modules", ".vscode-test", "vscode", "mcp-golang", "mcp-go", "mcp", "test", "out", "src/views"]
+  "exclude": ["node_modules", ".vscode-test", "vscode", "mcp-golang", "mcp-go", "mcp", "test", "build", "src/views"]
 }

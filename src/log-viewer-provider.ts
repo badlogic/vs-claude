@@ -18,7 +18,7 @@ export class LogViewerWebviewProvider {
 		this.panel = vscode.window.createWebviewPanel('vsClaudeLogViewer', 'VS Claude Logs', vscode.ViewColumn.Two, {
 			enableScripts: true,
 			retainContextWhenHidden: true,
-			localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'out')],
+			localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'build', 'extension')],
 		});
 
 		// Set the icon
@@ -53,10 +53,10 @@ export class LogViewerWebviewProvider {
 
 	private getWebviewContent(webview: vscode.Webview): string {
 		const scriptUri = webview.asWebviewUri(
-			vscode.Uri.joinPath(this.context.extensionUri, 'out', 'views', 'log-viewer-webview.js')
+			vscode.Uri.joinPath(this.context.extensionUri, 'build', 'extension', 'views', 'log-viewer-webview.js')
 		);
 		const styleUri = webview.asWebviewUri(
-			vscode.Uri.joinPath(this.context.extensionUri, 'out', 'views', 'styles.css')
+			vscode.Uri.joinPath(this.context.extensionUri, 'build', 'extension', 'views', 'styles.css')
 		);
 		const logoUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'logo.png'));
 

@@ -6,37 +6,26 @@
             "type": "extensionHost",
             "request": "launch",
             "args": [
+                "--profile=vs-claude-debug",
                 "--extensionDevelopmentPath=${workspaceFolder}"
             ],
             "outFiles": [
-                "${workspaceFolder}/out/**/*.js"
+                "${workspaceFolder}/build/extension/**/*.js"
             ],
             "preLaunchTask": "npm: build:debug"
         },
         {
-            "name": "Extension Tests",
+            "name": "Run Extension (Watch)",
             "type": "extensionHost",
             "request": "launch",
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}",
-                "--extensionTestsPath=${workspaceFolder}/out/test/suite/index"
+                "--profile=vs-claude-debug",
+                "--extensionDevelopmentPath=${workspaceFolder}"
             ],
             "outFiles": [
-                "${workspaceFolder}/out/test/**/*.js"
+                "${workspaceFolder}/build/extension/**/*.js"
             ],
-            "preLaunchTask": "npm: build"
-        },
-        {
-            "name": "Debug Tests",
-            "type": "node",
-            "request": "launch",
-            "program": "${workspaceFolder}/out/test/runTest.js",
-            "console": "integratedTerminal",
-            "internalConsoleOptions": "neverOpen",
-            "outFiles": [
-                "${workspaceFolder}/out/**/*.js"
-            ],
-            "preLaunchTask": "npm: test"
+            "preLaunchTask": "npm: watch"
         }
     ]
 }

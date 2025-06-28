@@ -15,7 +15,7 @@
   "categories": [
     "Other"
   ],
-  "main": "./out/extension.js",
+  "main": "./build/extension/extension.js",
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -39,16 +39,21 @@
       {
         "command": "vs-claude.showLogs",
         "title": "VS Claude: Show Logs"
+      },
+      {
+        "command": "vs-claude.initializeLSPs",
+        "title": "VS Claude: Initialize Language Servers"
       }
     ]
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
     "build": "tsc -p ./ && node scripts/build-webviews.js && ./scripts/build-binaries.sh",
-    "build:debug": "tsc -p ./ && node scripts/build-webviews.js && cd mcp && go build -o ../bin/mcp-server-$(go env GOOS)-$(go env GOARCH)$(go env GOEXE) . && cd ..",
+    "build:debug": "tsc -p ./ && node scripts/build-webviews.js && cd mcp && go build -o ../build/mcp/mcp-server-$(go env GOOS)-$(go env GOARCH)$(go env GOEXE) . && cd ..",
+    "watch": "concurrently \"tsc -watch -p ./\" \"node scripts/build-webviews.js --watch\"",
     "check": "biome check --write ./src && cd mcp && go fmt ./... && cd .. && tsc --noEmit",
-    "test": "rm -rf out && npm run build && tsc -p ./tsconfig.test.json && cp -r test/test-workspace out/test/ && node test/setup-test-workspace.js && node ./out/test/runTest.js",
-    "clean": "rm -rf out/ bin/",
+    "test": "rm -rf build && npm run build && tsc -p ./tsconfig.test.json && cp -r test/test-workspace build/extension/test/ && node test/setup-test-workspace.js && node ./build/extension/test/runTest.js",
+    "clean": "rm -rf build/",
     "prepare": "husky"
   },
   "devDependencies": {

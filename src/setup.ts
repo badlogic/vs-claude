@@ -156,7 +156,7 @@ export class SetupManager {
 			return null;
 		}
 
-		const mcpServerPath = path.join(this.context.extensionPath, 'bin', binaryName);
+		const mcpServerPath = path.join(this.context.extensionPath, 'build', 'mcp', binaryName);
 		// Return MCP server path
 		return mcpServerPath;
 	}

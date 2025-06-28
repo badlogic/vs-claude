@@ -6,24 +6,24 @@ echo "Building VS Claude MCP server binaries..."
 
 cd "$(dirname "$0")/.."
 cd mcp
-mkdir -p ../bin
+mkdir -p ../build/mcp
 
 # Build for macOS Intel
 echo "Building for macOS Intel..."
-GOOS=darwin GOARCH=amd64 go build -o ../bin/mcp-server-darwin-amd64 .
+GOOS=darwin GOARCH=amd64 go build -o ../build/mcp/mcp-server-darwin-amd64 .
 
 # Build for macOS ARM64
 echo "Building for macOS ARM64..."
-GOOS=darwin GOARCH=arm64 go build -o ../bin/mcp-server-darwin-arm64 .
+GOOS=darwin GOARCH=arm64 go build -o ../build/mcp/mcp-server-darwin-arm64 .
 
 # Build for Linux
 echo "Building for Linux..."
-GOOS=linux GOARCH=amd64 go build -o ../bin/mcp-server-linux-amd64 .
+GOOS=linux GOARCH=amd64 go build -o ../build/mcp/mcp-server-linux-amd64 .
 
 # Build for Windows
 echo "Building for Windows..."
-GOOS=windows GOARCH=amd64 go build -o ../bin/mcp-server-windows-amd64.exe .
+GOOS=windows GOARCH=amd64 go build -o ../build/mcp/mcp-server-windows-amd64.exe .
 
 cd ..
 
-echo "Build complete! Binaries are in the bin/ directory."
+echo "Build complete! Binaries are in the build/mcp/ directory."

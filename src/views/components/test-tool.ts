@@ -254,7 +254,6 @@ export class TestToolElement extends LitElement {
 	private formatSymbolResults(symbols: any[], parentPath?: string): string {
 		const html = symbols
 			.map((symbol) => {
-				const icon = this.getSymbolIcon(symbol.kind);
 				const badgeColor = this.getKindBadgeColor(symbol.kind);
 
 				// For children, prepend parent path if location doesn't include it
@@ -263,19 +262,61 @@ export class TestToolElement extends LitElement {
 					fullLocation = `${parentPath}:${symbol.location}`;
 				}
 
-				const location = this.formatLocation(fullLocation);
+				const isChild = !!parentPath;
+				const location = this.formatLocation(fullLocation, isChild);
 				const locationParts = this.parseLocation(fullLocation);
 				const currentPath = locationParts?.path || parentPath;
 
-				let result = `<div style="padding: 2px 0; white-space: nowrap;">`;
-				result += `<span style="margin-right: 6px;">${icon}</span>`;
-				result += `<span style="color: var(--vscode-symbolIcon-${symbol.kind.toLowerCase()}Foreground, var(--vscode-foreground));">${symbol.name}</span>`;
-				result += ` <span style="padding: 2px 6px; background: ${badgeColor.bg}; color: ${badgeColor.fg}; border-radius: 3px; font-size: 10px; font-weight: 600; text-transform: uppercase; margin: 0 4px;">${symbol.kind}</span>`;
-				if (location && locationParts) {
-					result += ` <a href="javascript:void(0)" style="color: var(--vscode-textLink-foreground); text-decoration: underline; cursor: pointer; font-size: 11px;" 
-					data-path="${locationParts.path}" data-line="${locationParts.line}" data-column="${locationParts.column}">${location}</a>`;
-					result += ` <button class="open-file-btn" style="padding: 1px 4px; margin-left: 4px; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: 1px solid var(--vscode-button-border); border-radius: 2px; font-size: 10px; cursor: pointer;" 
-					data-path="${locationParts.path}" data-line="${locationParts.line}" data-column="${locationParts.column}" title="Open file">↗</button>`;
+				// Use preview as the main display text, fallback to name if no preview
+				const displayText = symbol.preview || symbol.name;
+
+				let result = `<div style="padding: 2px 0; font-family: var(--vscode-editor-font-family);">`;
+
+				if (isChild) {
+					// For children: location name preview all on one line
+					result += `<div style="white-space: nowrap;">`;
+
+					// Location first
+					if (location && locationParts) {
+						result += `<a href="javascript:void(0)" style="color: var(--vscode-textLink-foreground); text-decoration: underline; cursor: pointer; font-size: 11px; margin-right: 8px;" 
+						data-path="${locationParts.path}" data-line="${locationParts.line}" data-column="${locationParts.column}">${location}</a>`;
+					}
+
+					// Symbol name
+					result += `<span style="color: var(--vscode-foreground); margin-right: 8px;">${this.escapeHtml(symbol.name)}</span>`;
+
+					// Preview
+					if (symbol.preview) {
+						result += `<span style="color: ${badgeColor.fg};">${this.escapeHtml(symbol.preview)}</span>`;
+					}
+
+					// Open button
+					if (locationParts) {
+						result += ` <button class="open-file-btn" style="padding: 1px 4px; margin-left: 4px; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: 1px solid var(--vscode-button-border); border-radius: 2px; font-size: 10px; cursor: pointer;" 
+						data-path="${locationParts.path}" data-line="${locationParts.line}" data-column="${locationParts.column}" title="Open file">↗</button>`;
+					}
+
+					result += `</div>`;
+				} else {
+					// For root symbols: original layout
+					result += `<div style="white-space: nowrap;">`;
+
+					// Location first
+					if (location && locationParts) {
+						result += `<a href="javascript:void(0)" style="color: var(--vscode-textLink-foreground); text-decoration: underline; cursor: pointer; font-size: 11px; margin-right: 8px;" 
+						data-path="${locationParts.path}" data-line="${locationParts.line}" data-column="${locationParts.column}">${location}</a>`;
+					}
+
+					// Preview/name text with color based on kind
+					result += `<span style="color: ${badgeColor.fg};">${this.escapeHtml(displayText)}</span>`;
+
+					// Open button
+					if (locationParts) {
+						result += ` <button class="open-file-btn" style="padding: 1px 4px; margin-left: 4px; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: 1px solid var(--vscode-button-border); border-radius: 2px; font-size: 10px; cursor: pointer;" 
+						data-path="${locationParts.path}" data-line="${locationParts.line}" data-column="${locationParts.column}" title="Open file">↗</button>`;
+					}
+
+					result += `</div>`;
 				}
 
 				// Handle children
@@ -351,11 +392,28 @@ export class TestToolElement extends LitElement {
 		);
 	}
 
-	private formatLocation(location: string): string {
+	private formatLocation(location: string, isChild: boolean = false): string {
 		if (!location) return '';
-		// Make paths relative to workspace if possible
+		// Handle both simple and range locations
+		const rangeMatch = location.match(/([^:]+):(\d+):(\d+)-(\d+):(\d+)/);
+		if (rangeMatch) {
+			if (isChild) {
+				// For children, just show line:col-line:col
+				return `${rangeMatch[2]}:${rangeMatch[3]}-${rangeMatch[4]}:${rangeMatch[5]}`;
+			}
+			const path = rangeMatch[1];
+			const parts = path.split('/');
+			const shortPath = parts.slice(-2).join('/');
+			return `${shortPath}:${rangeMatch[2]}:${rangeMatch[3]}-${rangeMatch[4]}:${rangeMatch[5]}`;
+		}
+
+		// Fall back to simple location
 		const match = location.match(/([^:]+):(\d+):(\d+)/);
 		if (match) {
+			if (isChild) {
+				// For children, just show line:col
+				return `${match[2]}:${match[3]}`;
+			}
 			const path = match[1];
 			const parts = path.split('/');
 			const shortPath = parts.slice(-2).join('/');
@@ -364,7 +422,22 @@ export class TestToolElement extends LitElement {
 		return location;
 	}
 
-	private parseLocation(location: string): { path: string; line: number; column: number } | null {
+	private parseLocation(
+		location: string
+	): { path: string; line: number; column: number; endLine?: number; endColumn?: number } | null {
+		// Try to parse range location first
+		const rangeMatch = location?.match(/([^:]+):(\d+):(\d+)-(\d+):(\d+)/);
+		if (rangeMatch) {
+			return {
+				path: rangeMatch[1],
+				line: parseInt(rangeMatch[2]),
+				column: parseInt(rangeMatch[3]),
+				endLine: parseInt(rangeMatch[4]),
+				endColumn: parseInt(rangeMatch[5]),
+			};
+		}
+
+		// Fall back to simple location
 		const match = location?.match(/([^:]+):(\d+):(\d+)/);
 		if (match) {
 			return {
@@ -374,6 +447,15 @@ export class TestToolElement extends LitElement {
 			};
 		}
 		return null;
+	}
+
+	private escapeHtml(text: string): string {
+		return text
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#39;');
 	}
 
 	private formatJson(obj: any): string {

@@ -28,7 +28,7 @@ export class LogViewerElement extends LitElement {
 		}
 	}
 
-	private handleScroll(e: Event) {
+	private handleScroll(_e: Event) {
 		if (!this.scrollContainer) return;
 
 		// Check if scrolled to bottom (within 5px tolerance)

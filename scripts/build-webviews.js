@@ -7,7 +7,7 @@ const fs = require('fs');
 const isWatchMode = process.argv.includes('--watch');
 
 const viewsDir = path.join(__dirname, '..', 'src', 'views');
-const outDir = path.join(__dirname, '..', 'out', 'views');
+const outDir = path.join(__dirname, '..', 'build', 'extension', 'views');
 
 // Ensure output directory exists
 if (!fs.existsSync(outDir)) {
@@ -21,7 +21,7 @@ const jsCommand = [
   'src/views/test-tool-webview.ts',
   '--bundle',
   '--sourcemap',
-  '--outdir=out/views',
+  '--outdir=build/extension/views',
   '--format=iife',
   '--platform=browser',
   '--external:vscode',
@@ -33,7 +33,7 @@ const cssCommand = [
   'tailwindcss',
   '-c', 'src/views/tailwind.config.js',
   '-i', 'src/views/styles.css',
-  '-o', 'out/views/styles.css',
+  '-o', 'build/extension/views/styles.css',
   isWatchMode ? '--watch' : '--minify'
 ].filter(Boolean).join(' ');
 

@@ -113,6 +113,13 @@ RETURNS:
 - Single request: {"success": true, "data": [array of symbols]}
 - Batch requests: [{"success": true, "data": [...]}, {"success": false, "error": "..."}]
 
+EACH SYMBOL INCLUDES:
+- name: symbol name
+- kind: symbol type (class, method, etc.)
+- location: "path:line:col-line:col" format
+- preview: line of code where symbol is defined
+- children?: nested symbols
+
 LOCATION FORMAT:
 Top-level: "path:line:col-line:col"
 Children: "line:col-line:col" (within file in top-level root path)
@@ -163,8 +170,15 @@ BATCH REQUESTS (analyze multiple files):
 ]
 
 RETURNS:
-- Single: {"success": true, "data": [{"name": "User", "kind": "Class", "location": "...", "children": [...]}]}
-- Batch: [{"success": true, "data": [...]}, {"success": true, "data": [...]}]`),
+- Single: {"success": true, "data": [{"name": "User", "kind": "Class", "location": "...", "preview": "class User extends BaseModel {", "children": [...]}]}
+- Batch: [{"success": true, "data": [...]}, {"success": true, "data": [...]}]
+
+EACH TYPE/FUNCTION INCLUDES:
+- name: symbol name
+- kind: symbol type (Class, Interface, Function, etc.)
+- location: file path with line/column range
+- preview: line of code where symbol is defined
+- children?: members for types (methods, properties, etc.)`),
 			mcp.WithObject("args",
 				mcp.Description("Single file path object or array of file paths for batch operations"),
 			),

@@ -144,6 +144,9 @@ export class CommandHandler {
 				}
 
 				case 'supertype': {
+					typedCommand.args.forEach((arg) => {
+						arg.type = 'supertype';
+					});
 					const results = await Promise.all(
 						typedCommand.args.map((arg) => this.subAndSupertypeTool.execute(arg))
 					);
@@ -152,6 +155,9 @@ export class CommandHandler {
 				}
 
 				case 'subtype': {
+					typedCommand.args.forEach((arg) => {
+						arg.type = 'subtype';
+					});
 					const results = await Promise.all(
 						typedCommand.args.map((arg) => this.subAndSupertypeTool.execute(arg))
 					);

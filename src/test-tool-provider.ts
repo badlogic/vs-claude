@@ -27,7 +27,7 @@ export class TestToolWebviewProvider {
 			{
 				enableScripts: true,
 				retainContextWhenHidden: true,
-				localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'out')],
+				localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'build', 'extension')],
 			}
 		);
 
@@ -90,10 +90,10 @@ export class TestToolWebviewProvider {
 
 	private getWebviewContent(webview: vscode.Webview): string {
 		const scriptUri = webview.asWebviewUri(
-			vscode.Uri.joinPath(this.context.extensionUri, 'out', 'views', 'test-tool-webview.js')
+			vscode.Uri.joinPath(this.context.extensionUri, 'build', 'extension', 'views', 'test-tool-webview.js')
 		);
 		const styleUri = webview.asWebviewUri(
-			vscode.Uri.joinPath(this.context.extensionUri, 'out', 'views', 'styles.css')
+			vscode.Uri.joinPath(this.context.extensionUri, 'build', 'extension', 'views', 'styles.css')
 		);
 		const logoUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'logo.png'));
 

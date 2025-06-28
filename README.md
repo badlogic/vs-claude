@@ -2,14 +2,14 @@
 
 A VS Code extension with an integrated MCP server that allows MCP clients like Claude to interact with Visual Studio Code.
 
-## ✨ Key Features
+## Key Features
 
-- 🔍 **Advanced Symbol Search** - Find code elements with wildcards, hierarchical queries, and type filtering
-- 📊 **Batch Operations** - Execute multiple queries in parallel for optimal performance  
-- 🎨 **Modern UI** - Interactive test tool and log viewer built with Lit + Tailwind CSS
-- 🔧 **Full LSP Support** - References, definitions, diagnostics, and type hierarchy
-- 📁 **Smart File Operations** - Open files, diffs, and Git comparisons
-- 🚀 **Developer Friendly** - Hot reload, panel persistence, and comprehensive logging
+- **Advanced Symbol Search** - Find code elements with wildcards, hierarchical queries, and type filtering
+- **Batch Operations** - Execute multiple queries in parallel for optimal performance  
+- **Modern UI** - Interactive test tool and log viewer built with Lit + Tailwind CSS
+- **Full LSP Support** - References, definitions, diagnostics, and type hierarchy
+- **Smart File Operations** - Open files, diffs, and Git comparisons
+- **Developer Friendly** - Hot reload, panel persistence, and comprehensive logging
 
 ## Overview
 
@@ -78,30 +78,6 @@ mcp_vs-claude_symbols({args: [
 ]})
 ```
 
-## 🎨 Modern UI Features
-
-### Interactive Test Tool
-- **Live testing interface** for all VS Claude tools
-- **Non-collapsible sections** showing all tools at once
-- **Toggleable symbol kind badges** for easy filtering
-- **Clickable locations** that auto-fill other tool inputs
-- **Open file buttons** (↗) next to paths and symbol locations
-- **Colored badges** for different symbol types with consistent theming
-
-### Enhanced Log Viewer
-- **Real-time log streaming** with auto-scroll
-- **Colored component badges** with hash-based color assignment
-- **Horizontal scrolling** for long messages
-- **JSON syntax highlighting** for structured data
-- **Fixed-width columns** for consistent alignment
-- **Smart auto-scroll** that respects user scroll position
-
-### Development Features
-- **Panel persistence** - Webview panels automatically reopen after extension reload
-- **Modern tech stack** - Built with Lit Web Components and Tailwind CSS
-- **Light DOM rendering** - Full VS Code theme integration
-- **Responsive design** - Adapts to different panel sizes
-
 ## Installation
 
 ### Option 1: From VS Code Extension Marketplace
@@ -125,11 +101,20 @@ npm run build
    - Select the generated `.vsix` file
 
 ### Set up Claude Integration
-After installation:
-1. Run command "VS Claude: Install MCP"
-2. The extension will install the MCP server for Claude
+After installation, you will be prompted to install the MCP server for Claude. Click "Install" to proceed.
+
+If you need to install it later or manually:
+1. Open the Command Palette (`Cmd+Shift+P` on Mac or `Ctrl+Shift+P` on Windows/Linux)
+2. Run "VS Claude: Install MCP"
 3. Restart Claude to activate
 4. Instruct Claude to use the vs-claude tools if appropriate for the task
+
+### Set up Integration with Other AI Assistants
+If your AI assistant supports MCP servers:
+1. Open the Command Palette (`Cmd+Shift+P` on Mac or `Ctrl+Shift+P` on Windows/Linux)
+2. Run "VS Claude: Install MCP"
+3. Click "Manual Setup"
+4. Follow the MCP server configuration instructions for your AI assistant
 
 ## Architecture
 
@@ -139,7 +124,7 @@ VS Claude consists of two components:
 - Installs the MCP server with Claude CLI
 - Implements the business logic for tools using VS Code's Language Server Protocol APIs
 - Executes commands from MCP servers in response to tool calls
-- Manages file-based IPC for communication
+- Manages file-based IPC for communication with all connected MCP clients
 
 **Commands:**
 - `VS Claude: Install MCP` - Install the MCP server with Claude
@@ -210,17 +195,20 @@ vs-claude/
 │   │   ├── styles.css             # Tailwind CSS styles
 │   │   ├── tailwind.config.js    # Tailwind configuration
 │   │   └── tsconfig.json          # Browser-specific TypeScript config
-│   ├── command-handler.ts   # Command dispatcher with batch support
-│   ├── window-manager.ts    # Window IPC management
-│   ├── logger.ts            # Structured logging system
-│   ├── log-viewer-provider.ts  # Log viewer webview provider
-│   ├── test-tool-provider.ts   # Test tool webview provider
-│   └── setup.ts             # MCP installation logic
+│   ├── command-handler.ts     # Command dispatcher with batch support
+│   ├── window-manager.ts      # Window IPC management
+│   ├── language-extensions.ts # Auto-install language extensions
+│   ├── logger.ts              # Structured logging system
+│   ├── log-viewer-provider.ts # Log viewer webview provider
+│   ├── test-tool-provider.ts  # Test tool webview provider
+│   └── setup.ts               # MCP installation logic
 ├── mcp/                 # Go MCP server source
 │   └── main.go         # MCP server implementation
 ├── scripts/             # Build and utility scripts
-│   ├── build-webviews.js    # Webview bundling script
-│   └── build-binaries.sh    # Cross-platform Go compilation
+│   ├── build-webviews.js         # Webview bundling script
+│   ├── build-binaries.sh         # Cross-platform Go compilation
+│   ├── setup-test-extensions.js  # Install extensions for tests
+│   └── setup-test-workspace.js   # Git setup for tests
 ├── test/                # Comprehensive test suite
 │   ├── suite/
 │   │   ├── individual-tools.test.ts # Individual tool tests
@@ -229,10 +217,10 @@ vs-claude/
 │   │   └── test-helpers.ts          # Shared test utilities
 │   ├── test-workspace/  # Multi-language test project
 │   │   └── src/        # Sample code in various languages
-│   ├── setup-test-workspace.js # Git setup for tests
 │   └── runTest.ts      # Test runner
-├── bin/                # Built binaries (generated)
-├── out/                # Compiled TypeScript (generated)
+├── build/              # All build outputs (generated)
+│   ├── mcp/            # Cross-platform Go binaries (darwin-amd64, darwin-arm64, linux-amd64, windows-amd64)
+│   └── extension/      # TypeScript compilation output
 └── CLAUDE.md           # Project-specific instructions
 ```
 
@@ -262,12 +250,24 @@ The test process:
 2. Compiles test files
 3. Copies test workspace to output directory
 4. Initializes git repository with test changes
-5. Downloads VS Code (if not cached)
-6. Installs required language extensions (Python, Go, C#, Java, C/C++, Dart)
-7. Launches VS Code with the test workspace
+5. Sets up the isolated VS Code profile (if not already done)
+6. Downloads VS Code (if not cached)
+7. Launches VS Code with the test workspace using the isolated profile
 8. Runs all test suites
 
-**Note**: First test run will be slower as it downloads VS Code and installs language extensions.
+The test environment uses an isolated directory (`.vscode-test/`) with these extensions:
+- Python (`ms-python.python` + `ms-python.vscode-pylance`)
+- Go (`golang.go`)
+- C# (`ms-dotnettools.csharp`)
+- Java (`redhat.java`)
+- C/C++ (`llvm-vs-code-extensions.vscode-clangd`)
+- Dart (`Dart-Code.dart-code`)
+
+**Note**: First test run will be slower as it downloads VS Code and sets up the profile.
+
+### Development
+
+Press F5 to run the extension. The extension automatically installs required language extensions when running in development mode.
 
 ## Troubleshooting
 
@@ -278,11 +278,12 @@ The test process:
 
 ### Query Returns Empty Results
 - Language servers activate lazily - open a file of the target language first
+- Run "VS Claude: Initialize Language Servers" command to force LSP activation
 - Check your query syntax - dots (.) control hierarchy depth
 - Try simpler queries first
 
 ### Multiple VS Code Windows
-When multiple windows are open, you'll get an error listing available windows. Include the windowId in subsequent calls:
+When multiple windows are open, the MCP server returns an error listing available windows to the MCP client. The MCP client must then specify a windowId with each request:
 ```javascript
 mcp_vs-claude_query({
   args: {"type": "symbols", "query": "UserService"},
@@ -295,26 +296,11 @@ mcp_vs-claude_query({
 #### Java Type Hierarchy
 The Java Language Server (used by the Red Hat Java extension) does not support the standard VS Code type hierarchy API. As a result, the `supertype` and `subtype` tools will not work with Java files. The Java extension implements its own custom type hierarchy using proprietary workspace commands instead of the standard LSP 3.17 type hierarchy protocol.
 
+#### C++ (clangd)
+When using clangd, symbol queries may include C++ friend class declarations as matching symbols. This is expected behavior from the clangd LSP server and may affect symbol search results when working with C++ code that uses friend declarations.
 
-## Recent Improvements
+**Note**: This extension has been tested with clangd (not Microsoft C++ Tools) as clangd provides better language server protocol compliance.
 
-### 🚀 Performance
-- **Batch operations** for all code intelligence tools
-- **Parallel processing** of multiple requests
-- **Optimized file traversal** for folder searches
-- **Count-only mode** for large result sets
-
-### 🛠️ Code Quality
-- **TypeScript strict mode** throughout the codebase
-- **Biome** for fast, opinionated formatting and linting
-- **Comprehensive test coverage** with real VS Code integration tests
-- **Modular architecture** with single-responsibility tools
-
-### 🎯 Developer Experience
-- **CLAUDE.md integration** for project-specific AI instructions
-- **Hot reload support** with webview persistence
-- **Detailed logging** with structured output
-- **Clear error messages** with actionable feedback
 
 ## Contributing
 

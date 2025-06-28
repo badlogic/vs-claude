@@ -83,7 +83,10 @@ export class SymbolsTool {
 			return { result: [] };
 		}
 
-		const filtered = this.filterSymbols(documentSymbols, query, kindFilter);
+		// Open the document to get preview lines
+		const document = await vscode.workspace.openTextDocument(uri);
+
+		const filtered = this.filterSymbols(documentSymbols, query, kindFilter, document);
 		const filePath = uri.fsPath;
 		for (const symbol of filtered) {
 			symbol.location = `${filePath}:${symbol.location}`;
@@ -247,7 +250,8 @@ export class SymbolsTool {
 	private filterSymbols(
 		symbols: vscode.DocumentSymbol[],
 		query: string,
-		kindFilter?: SymbolKindName[]
+		kindFilter?: SymbolKindName[],
+		document?: vscode.TextDocument
 	): CodeSymbol[] {
 		const result: CodeSymbol[] = [];
 
@@ -265,7 +269,12 @@ export class SymbolsTool {
 				if (this.nameAndKindMatches(symbol.name, symbol.kind, firstPart)) {
 					// Symbol matches first part - consume it and continue with remaining query
 					if (remainingQuery && symbol.children && symbol.children.length > 0) {
-						const filteredChildren = this.filterSymbols(symbol.children, remainingQuery, kindFilter);
+						const filteredChildren = this.filterSymbols(
+							symbol.children,
+							remainingQuery,
+							kindFilter,
+							document
+						);
 
 						if (filteredChildren.length > 0) {
 							// Include this symbol with filtered children
@@ -276,6 +285,15 @@ export class SymbolsTool {
 								location: this.formatRange(combinedRange),
 								children: filteredChildren,
 							};
+							// Add preview if document is available
+							if (document) {
+								try {
+									const line = document.lineAt(symbol.selectionRange.start.line);
+									sym.preview = line.text.trim();
+								} catch (_e) {
+									// Line might be out of bounds
+								}
+							}
 							result.push(sym);
 						}
 					} else if (!remainingQuery) {
@@ -287,6 +305,15 @@ export class SymbolsTool {
 							kind: vscode.SymbolKind[symbol.kind],
 							location: this.formatRange(combinedRange),
 						};
+						// Add preview if document is available
+						if (document) {
+							try {
+								const line = document.lineAt(symbol.selectionRange.start.line);
+								sym.preview = line.text.trim();
+							} catch (_e) {
+								// Line might be out of bounds
+							}
+						}
 						result.push(sym);
 					}
 					// else: query expects more depth but symbol has no children - no match
@@ -295,7 +322,8 @@ export class SymbolsTool {
 					const filteredChildren = this.filterSymbols(
 						symbol.children,
 						query, // Keep full query
-						kindFilter
+						kindFilter,
+						document
 					);
 
 					if (filteredChildren.length > 0) {
@@ -307,6 +335,15 @@ export class SymbolsTool {
 							location: this.formatRange(combinedRange),
 							children: filteredChildren,
 						};
+						// Add preview if document is available
+						if (document) {
+							try {
+								const line = document.lineAt(symbol.selectionRange.start.line);
+								sym.preview = line.text.trim();
+							} catch (_e) {
+								// Line might be out of bounds
+							}
+						}
 						result.push(sym);
 					}
 				}
@@ -323,10 +360,19 @@ export class SymbolsTool {
 						location: this.formatRange(combinedRange),
 						// Don't include children unless query explicitly asks for them
 					};
+					// Add preview if document is available
+					if (document) {
+						try {
+							const line = document.lineAt(symbol.selectionRange.start.line);
+							sym.preview = line.text.trim();
+						} catch (_e) {
+							// Line might be out of bounds
+						}
+					}
 					result.push(sym);
 				} else if (symbol.children && symbol.children.length > 0) {
 					// Symbol doesn't match: check if any descendants match
-					const filteredChildren = this.filterSymbols(symbol.children, query, kindFilter);
+					const filteredChildren = this.filterSymbols(symbol.children, query, kindFilter, document);
 
 					if (filteredChildren.length > 0) {
 						// Include this symbol with filtered children
@@ -337,6 +383,15 @@ export class SymbolsTool {
 							location: this.formatRange(combinedRange),
 							children: filteredChildren,
 						};
+						// Add preview if document is available
+						if (document) {
+							try {
+								const line = document.lineAt(symbol.selectionRange.start.line);
+								sym.preview = line.text.trim();
+							} catch (_e) {
+								// Line might be out of bounds
+							}
+						}
 						result.push(sym);
 					}
 				}

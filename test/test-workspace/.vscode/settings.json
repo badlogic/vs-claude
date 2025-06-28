@@ -3,7 +3,13 @@
   "java.project.sourcePaths": ["src/java"],
   "python.linting.enabled": true,
   "go.useLanguageServer": true,
-  "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+  "clangd.path": "clangd",
+  "clangd.arguments": [
+    "--header-insertion=never",
+    "--compile-commands-dir=${workspaceFolder}",
+    "--query-driver=**"
+  ],
+  "C_Cpp.intelliSenseEngine": "disabled",
   "[csharp]": {
     "editor.defaultFormatter": "ms-dotnettools.csharp"
   }

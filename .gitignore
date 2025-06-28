@@ -3,10 +3,8 @@ node_modules/
 *.log
 
 # Build outputs
-out/
-bin/
-*.vsix
 build/
+*.vsix
 
 # VS Code
 .vscode/*
@@ -53,3 +51,4 @@ coverage/
 # VS Claude runtime files
 .vs-claude/
 mcp/test-output.txt
+.vscode-test-profile-setup
