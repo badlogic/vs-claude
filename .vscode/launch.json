@@ -15,19 +15,6 @@
             "preLaunchTask": "npm: build:debug"
         },
         {
-            "name": "Run Extension (Watch)",
-            "type": "extensionHost",
-            "request": "launch",
-            "args": [
-                "--profile=vs-claude-debug",
-                "--extensionDevelopmentPath=${workspaceFolder}"
-            ],
-            "outFiles": [
-                "${workspaceFolder}/build/extension/**/*.js"
-            ],
-            "preLaunchTask": "npm: watch"
-        },
-        {
             "name": "Extension Tests",
             "type": "extensionHost",
             "request": "launch",
