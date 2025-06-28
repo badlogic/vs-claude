@@ -47,6 +47,18 @@ suite('Individual Tools Unit Tests', function () {
 		subAndSupertypeTool = new SubAndSupertypeTool();
 		allTypesInFileTool = new AllTypesInFileTool();
 
+		// Open a TypeScript file to ensure language server is active
+		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+		if (workspaceFolder) {
+			const tsFile = vscode.Uri.file(path.join(workspaceFolder.uri.fsPath, 'src/typescript/user.service.ts'));
+			try {
+				const doc = await vscode.window.showTextDocument(tsFile);
+				console.log('Opened file to activate TS language server:', doc.document.fileName);
+			} catch (err) {
+				console.log('Failed to open TS file:', err);
+			}
+		}
+		
 		// Give language servers time to initialize
 		console.log('Waiting for language servers to initialize...');
 		await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -71,7 +83,9 @@ suite('Individual Tools Unit Tests', function () {
 
 			if (result.success) {
 				const symbols = Array.isArray(result.data) ? result.data : [result.data];
-				assert.ok(symbols.length > 0, 'Should find UserService class');
+				console.log('Symbols found:', symbols.length);
+			console.log('Symbol names:', symbols.map((s: any) => s.name));
+			assert.ok(symbols.length > 0, 'Should find UserService class');
 				assert.ok(
 					symbols.some((s: CodeSymbol | CountResult) => 'name' in s && s.name === 'UserService'),
 					'Should find exact match'

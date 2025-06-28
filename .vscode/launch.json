@@ -33,16 +33,23 @@
             "request": "launch",
             "runtimeExecutable": "${execPath}",
             "args": [
-                "--profile=vs-claude-test",
+                "${workspaceFolder}/build/extension/test/test-workspace",
+                "--disable-workspace-trust",
+                "--skip-welcome",
+                "--skip-release-notes",
+                "--disable-updates",
+                "--disable-extension-update",
+                "--user-data-dir=${workspaceFolder}/.vscode-test/profile",
+                "--extensions-dir=${workspaceFolder}/.vscode-test/extensions",
                 "--extensionDevelopmentPath=${workspaceFolder}",
-                "--extensionTestsPath=${workspaceFolder}/build/test/runTest",
-                "${workspaceFolder}/test/test-workspace"
+                "--extensionTestsPath=${workspaceFolder}/build/extension/test/suite/index"
             ],
             "outFiles": [
                 "${workspaceFolder}/build/**/*.js"
             ],
             "preLaunchTask": "npm: test:build",
             "env": {
+                "VSCODE_TEST": "1",
                 "CI": "true"
             }
         }

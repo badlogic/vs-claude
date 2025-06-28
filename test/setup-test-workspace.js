@@ -16,6 +16,13 @@ console.log('Setting up test workspace at:', testWorkspacePath);
 process.chdir(testWorkspacePath);
 
 try {
+    // Check if .git directory exists and remove it to start fresh
+    const gitDir = path.join(testWorkspacePath, '.git');
+    if (fs.existsSync(gitDir)) {
+        console.log('Removing existing git repository...');
+        fs.rmSync(gitDir, { recursive: true, force: true });
+    }
+    
     // Initialize git repository
     console.log('Initializing git repository...');
     execSync('git init', { stdio: 'inherit' });

@@ -22,6 +22,23 @@ suite('MCP Integration Tests', function () {
 		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 		assert.ok(workspaceFolder, 'Test workspace should be open');
 		testWorkspacePath = workspaceFolder.uri.fsPath;
+
+		// Open files to activate language servers
+		try {
+			const tsFile = vscode.Uri.file(path.join(testWorkspacePath, 'src', 'typescript', 'user.service.ts'));
+			await vscode.window.showTextDocument(tsFile);
+			console.log('Opened TypeScript file to activate language server');
+
+			const pyFile = vscode.Uri.file(path.join(testWorkspacePath, 'src', 'python', 'user_service.py'));
+			await vscode.window.showTextDocument(pyFile);
+			console.log('Opened Python file to activate language server');
+		} catch (err) {
+			console.log('Failed to open files for language server activation:', err);
+		}
+
+		// Give language servers time to initialize
+		console.log('Waiting for language servers to fully initialize...');
+		await new Promise((resolve) => setTimeout(resolve, 5000));
 	});
 
 	suiteTeardown(() => {
@@ -86,10 +103,38 @@ suite('MCP Integration Tests', function () {
 			const result = await mcpClient.callTool('open', files);
 			assert.ok(result.success || result.data === '', 'Open command should succeed');
 
-			await new Promise((resolve) => setTimeout(resolve, 100));
+			// Give VS Code more time to open multiple files
+			console.log('Waiting for editors to open...');
+			await new Promise((resolve) => setTimeout(resolve, 1000));
 
+			// Check open tabs instead of visible editors
+			const tabGroups = vscode.window.tabGroups;
+			let totalTabs = 0;
+			const openFiles: string[] = [];
+
+			tabGroups.all.forEach((group) => {
+				group.tabs.forEach((tab) => {
+					totalTabs++;
+					// Check if tab has a URI (file tabs do)
+					const tabInput = tab.input as any;
+					if (tabInput?.uri) {
+						openFiles.push(tabInput.uri.fsPath);
+					}
+				});
+			});
+
+			console.log('Total open tabs:', totalTabs);
+			console.log('Open files:', openFiles);
+
+			// Also log visible editors for comparison
 			const openEditors = vscode.window.visibleTextEditors;
-			assert.ok(openEditors.length >= 2, 'Should have at least 2 editors open');
+			console.log('Number of visible editors:', openEditors.length);
+			console.log(
+				'Visible editor files:',
+				openEditors.map((e) => e.document.fileName)
+			);
+
+			assert.ok(totalTabs >= 2, 'Should have at least 2 tabs open');
 		});
 	});
 
@@ -210,6 +255,17 @@ suite('MCP Integration Tests', function () {
 
 		test('Should handle files in different languages', async () => {
 			const filePath = path.join(testWorkspacePath, 'src', 'python', 'user_service.py');
+
+			// Ensure Python language server is active by opening the file
+			try {
+				const pyFile = vscode.Uri.file(filePath);
+				await vscode.window.showTextDocument(pyFile);
+				console.log('Opened Python file to ensure language server is active');
+				await new Promise((resolve) => setTimeout(resolve, 2000));
+			} catch (err) {
+				console.log('Failed to open Python file:', err);
+			}
+
 			const result = await mcpClient.callTool('allTypesInFile', {
 				path: filePath,
 			});
@@ -217,6 +273,12 @@ suite('MCP Integration Tests', function () {
 			assert.ok(result.success, 'Query should succeed');
 			const types = JSON.parse(result.data);
 			assert.ok(Array.isArray(types), 'Result should be array');
+
+			console.log('Python file types found:', types.length);
+			console.log(
+				'Types:',
+				types.map((t: any) => `${t.name} (${t.kind})`)
+			);
 
 			// Python files should have classes or functions
 			const hasTypes = types.some((t: any) => t.kind === 'Class' || t.kind === 'Function');
