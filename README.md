@@ -51,6 +51,7 @@ VS Claude provides powerful tools for AI assistants to interact with VS Code, fe
    - Extract classes, interfaces, structs, enums
    - Include top-level functions
    - Returns complete type hierarchy with members and code previews
+   - **includeMembers** flag (default: true) - When false, excludes fields/methods but keeps nested types
    - **Batch support**: Analyze multiple files
 
 7. **supertype** - Find what a type extends/implements

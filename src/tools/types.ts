@@ -95,6 +95,7 @@ export interface TypeHierarchyRequest {
 export interface AllTypesInFileRequest {
 	type: 'allTypesInFile';
 	path: string;
+	includeMembers?: boolean; // Default: true. When false, excludes fields/methods but keeps nested types
 }
 
 export interface OpenFileRequest {

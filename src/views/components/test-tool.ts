@@ -36,7 +36,7 @@ export class TestToolElement extends LitElement {
 		definition: { path: '', line: '', column: '' },
 		supertypes: { path: '', line: '', column: '' },
 		subtypes: { path: '', line: '', column: '' },
-		allTypesInFile: { path: '' },
+		allTypesInFile: { path: '', includeMembers: true },
 		diagnostics: { path: '' },
 	};
 
@@ -711,6 +711,20 @@ export class TestToolElement extends LitElement {
 							`
 									: ''
 							}
+						</div>
+						<div style="margin-top: 12px;">
+							<label style="display: flex; align-items: center; gap: 6px; font-size: 12px;">
+								<input
+									type="checkbox"
+									.checked=${data.includeMembers}
+									@change=${(e: Event) => this.updateFormData('allTypesInFile', 'includeMembers', (e.target as HTMLInputElement).checked)}
+									style="width: 14px; height: 14px;"
+								>
+								Include members (fields, methods)
+							</label>
+							<p style="margin: 4px 0 0 20px; font-size: 11px; opacity: 0.7;">
+								When unchecked, only shows type definitions and nested types
+							</p>
 						</div>
 					</div>
 				`;

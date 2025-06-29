@@ -54,9 +54,10 @@ export class AllTypesInFileTool {
 							// Line might be out of bounds
 						}
 
-						// For types, include their members
+						// For types, include their members based on includeMembers flag
 						if (isType && symbol.children && symbol.children.length > 0) {
-							sym.children = this.extractMembers(symbol.children, document);
+							const includeMembers = request.includeMembers !== false; // Default to true
+							sym.children = this.extractMembers(symbol.children, document, includeMembers);
 						}
 
 						results.push(sym);
@@ -79,29 +80,56 @@ export class AllTypesInFileTool {
 		}
 	}
 
-	private extractMembers(symbols: vscode.DocumentSymbol[], document: vscode.TextDocument): CodeSymbol[] {
-		return symbols.map((symbol) => {
-			const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
-			const sym: CodeSymbol = {
-				name: symbol.name,
-				kind: vscode.SymbolKind[symbol.kind],
-				location: this.formatRange(combinedRange),
-			};
+	private extractMembers(
+		symbols: vscode.DocumentSymbol[],
+		document: vscode.TextDocument,
+		includeMembers: boolean
+	): CodeSymbol[] {
+		const results: CodeSymbol[] = [];
 
-			// Add preview
-			try {
-				const line = document.lineAt(symbol.selectionRange.start.line);
-				sym.preview = line.text.trim();
-			} catch (_e) {
-				// Line might be out of bounds
+		for (const symbol of symbols) {
+			// Check if this is a nested type (class, interface, struct, enum)
+			const isNestedType = [
+				vscode.SymbolKind.Class,
+				vscode.SymbolKind.Interface,
+				vscode.SymbolKind.Struct,
+				vscode.SymbolKind.Enum,
+			].includes(symbol.kind);
+
+			// Check if this is a member (field, method, property, constructor)
+			const isMember = [
+				vscode.SymbolKind.Field,
+				vscode.SymbolKind.Method,
+				vscode.SymbolKind.Property,
+				vscode.SymbolKind.Constructor,
+			].includes(symbol.kind);
+
+			// Include nested types always, or include members only if includeMembers is true
+			if (isNestedType || (includeMembers && isMember) || (!isNestedType && !isMember)) {
+				const combinedRange = new vscode.Range(symbol.selectionRange.start, symbol.range.end);
+				const sym: CodeSymbol = {
+					name: symbol.name,
+					kind: vscode.SymbolKind[symbol.kind],
+					location: this.formatRange(combinedRange),
+				};
+
+				// Add preview
+				try {
+					const line = document.lineAt(symbol.selectionRange.start.line);
+					sym.preview = line.text.trim();
+				} catch (_e) {
+					// Line might be out of bounds
+				}
+
+				if (symbol.children && symbol.children.length > 0) {
+					sym.children = this.extractMembers(symbol.children, document, includeMembers);
+				}
+
+				results.push(sym);
 			}
+		}
 
-			if (symbol.children && symbol.children.length > 0) {
-				sym.children = this.extractMembers(symbol.children, document);
-			}
-
-			return sym;
-		});
+		return results;
 	}
 
 	private formatRange(range: vscode.Range): string {

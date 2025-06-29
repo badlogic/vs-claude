@@ -162,12 +162,17 @@ RETURNS:
 
 SINGLE REQUEST:
 {"path": "/src/models/user.ts"}
+{"path": "/src/models/user.ts", "includeMembers": false}  // Only type definitions, no fields/methods
 
 BATCH REQUESTS (analyze multiple files):
 [
   {"path": "/src/models/user.ts"},
-  {"path": "/src/models/product.ts"}
+  {"path": "/src/models/product.ts", "includeMembers": false}
 ]
+
+PARAMETERS:
+- path: absolute file path to analyze
+- includeMembers?: boolean (default: true) - Include fields/methods. When false, only shows type definitions and nested types
 
 RETURNS:
 - Single: {"success": true, "data": [{"name": "User", "kind": "Class", "location": "...", "preview": "class User extends BaseModel {", "children": [...]}]}
@@ -178,7 +183,7 @@ EACH TYPE/FUNCTION INCLUDES:
 - kind: symbol type (Class, Interface, Function, etc.)
 - location: file path with line/column range
 - preview: line of code where symbol is defined
-- children?: members for types (methods, properties, etc.)`),
+- children?: members for types (methods, properties, nested types based on includeMembers flag)`),
 			mcp.WithObject("args",
 				mcp.Description("Single file path object or array of file paths for batch operations"),
 			),
