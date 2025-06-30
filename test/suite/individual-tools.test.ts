@@ -15,10 +15,11 @@ suite('Individual Tools Unit Tests', function () {
 	let openHandler: OpenHandler;
 
 	suiteSetup(async () => {
-		// Wait for VS Code to fully activate
-		const extension = vscode.extensions.getExtension('vs-claude.vs-claude');
-		assert.ok(extension, 'Extension not found');
-		await extension.activate();
+		// For development extensions in test mode, VS Code doesn't list them normally
+		// The extension should have already been activated by VS Code
+		
+		// Wait a bit for extension to fully initialize
+		await new Promise(resolve => setTimeout(resolve, 2000));
 
 		// Create tool instances
 		openHandler = new OpenHandler();

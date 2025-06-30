@@ -173,6 +173,15 @@ mcp_vs-claude_open({
 
 Contributions are welcome! Please read our contributing guidelines and submit pull requests to our repository.
 
+## Publishing to VS Code extension marketplace
+1. Go to https://dev.azure.com/badlogicgames/badlogicgames
+2. Sign in with badlogicgames@gmail.com
+3. Click the non-descriptive icon next to MZ in the top right
+4. Click on "Personal access tokens"
+5. Generate a new token, cause the old one likely expired. Select "All accessible organizations" for Organization, Scope Full access
+6. `vsce publish`, enter the stupid token
+7. Check https://marketplace.visualstudio.com/manage/publishers/mariozechner?noPrompt=true for status of publication
+
 ## License
 
 [License information here]

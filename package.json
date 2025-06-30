@@ -3,15 +3,36 @@
   "displayName": "VS Claude",
   "description": "MCP server for Claude to control VS Code",
   "version": "0.0.1",
-  "publisher": "vs-claude",
+  "publisher": "mariozechner",
   "icon": "logo.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/badlogic/vs-claude"
   },
-  "engines": {
-    "vscode": "^1.74.0"
+  "bugs": {
+    "url": "https://github.com/badlogic/vs-claude/issues"
   },
+  "homepage": "https://github.com/badlogic/vs-claude#readme",
+  "license": "MIT",
+  "author": "Mario Zechner",
+  "keywords": [
+    "vscode",
+    "mcp",
+    "claude",
+    "ai",
+    "assistant"
+  ],
+  "engines": {
+    "vscode": "^1.74.0",
+    "node": ">=16.0.0"
+  },
+  "files": [
+    "build/extension/**/*",
+    "build/mcp/**/*",
+    "README.md",
+    "LICENSE",
+    "logo.png"
+  ],
   "categories": [
     "Other"
   ],

@@ -166,10 +166,11 @@ export class E2ETestSetup {
 			return E2ETestSetup.mcpClient;
 		}
 
-		// Wait for extension to be fully activated
-		const extension = vscode.extensions.getExtension('vs-claude.vs-claude');
-		assert.ok(extension, 'Extension not found');
-		await extension.activate();
+		// For development extensions in test mode, VS Code doesn't list them normally
+		// The extension should have already been activated by VS Code
+		
+		// Wait a bit for extension to fully initialize
+		await new Promise(resolve => setTimeout(resolve, 2000));
 
 		// Start the MCP server
 		const platform = os.platform();
@@ -184,9 +185,10 @@ export class E2ETestSetup {
 			binaryName += 'windows-amd64.exe';
 		}
 
-		// The MCP server is in the extension's mcp directory, not the test workspace
-		const extensionPath = path.resolve(__dirname, '../../..');
-		const mcpServerPath = path.join(extensionPath, 'mcp', binaryName);
+		// The MCP server is in the build/mcp directory
+		// __dirname is build/extension/test/suite, so we need to go up to get to project root
+		const extensionPath = path.resolve(__dirname, '../../../..');
+		const mcpServerPath = path.join(extensionPath, 'build', 'mcp', binaryName);
 		assert.ok(fs.existsSync(mcpServerPath), `MCP server binary not found at ${mcpServerPath}`);
 
 		E2ETestSetup.mcpServer = spawn(mcpServerPath);

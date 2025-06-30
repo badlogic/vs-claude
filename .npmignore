@@ -1,0 +1,30 @@
+# Source files
+src/
+mcp/
+test/
+scripts/
+
+# Development files
+.vscode/
+.vscode-test/
+.husky/
+.github/
+
+# Config files
+tsconfig.json
+tsconfig.test.json
+biome.json
+.gitignore
+.gitattributes
+CLAUDE.md
+TODO.md
+
+# Build artifacts not needed
+build/extension/test/
+*.vsix
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
