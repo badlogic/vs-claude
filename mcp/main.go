@@ -16,6 +16,13 @@ import (
 
 var vsClaudeDir = filepath.Join(os.Getenv("HOME"), ".vs-claude")
 
+// Common description suffix for all tools about windowId
+const windowIdNote = `
+
+Note: When multiple VS Code windows are open, the tool will return an error listing available windows. 
+Pass the windowId at the top level of your request to specify which window to use:
+{"args": {...}, "windowId": "window-123"}`
+
 type WindowInfo struct {
 	Workspace   string    `json:"workspace"`
 	WindowTitle string    `json:"windowTitle"`
@@ -76,223 +83,13 @@ Git diff examples:
 Notes:
 - All paths must be absolute
 - startLine/endLine are optional and 1-based
-- Git diff works even if file doesn't exist in one revision (shows as added/deleted)
-- Multiple VS Code windows: the extension will prompt which window to use`),
+- Git diff works even if file doesn't exist in one revision (shows as added/deleted)`+windowIdNote),
 			mcp.WithObject("args",
 				mcp.Description("Single item object or array of items to open. All file paths must be absolute."),
 			),
 		),
 		handleTool,
 	)
-
-	// Register symbols tool
-	mcpServer.AddTool(
-		mcp.NewTool("symbols",
-			mcp.WithDescription(`Find code elements using VS Code's language intelligence. USE THIS INSTEAD OF GREP/RIPGREP for finding code.
-
-SINGLE REQUEST:
-{"query": "UserService", "kinds": ["class"]}
-
-BATCH REQUESTS (execute multiple searches in parallel):
-[
-  {"query": "get*", "kinds": ["method"]},
-  {"query": "User*", "kinds": ["interface"]},
-  {"query": "process*", "path": "/path/to/file.ts"}
-]
-
-PARAMETERS:
-- query?: pattern to match (default "*"). Use . for hierarchy, not :: or ->
-  "Class" → just Class | "Class.*" → Class + direct children | "Class.method" → specific method
-- path?: file or folder to search (absolute path)
-- kinds?: filter ["class","method","property","field","constructor","enum","interface","function","variable","constant","struct","operator","type"]
-  "type" = meta-kind matching class/interface/struct/enum
-- exclude?: glob patterns to skip ["**/test/**"]
-- countOnly?: return count only (faster for broad queries)
-
-RETURNS:
-- Single request: {"success": true, "data": [array of symbols]}
-- Batch requests: [{"success": true, "data": [...]}, {"success": false, "error": "..."}]
-
-EACH SYMBOL INCLUDES:
-- name: symbol name
-- kind: symbol type (class, method, etc.)
-- location: "path:line:col-line:col" format
-- preview: line of code where symbol is defined
-- children?: nested symbols
-
-LOCATION FORMAT:
-Top-level: "path:line:col-line:col"
-Children: "line:col-line:col" (within file in top-level root path)
-Use these locations for references/definition/supertype/subtype tools.`),
-			mcp.WithObject("args",
-				mcp.Description("Single request object or array of requests for batch operations"),
-			),
-		),
-		handleTool,
-	)
-
-	// Register references tool
-	mcpServer.AddTool(
-		mcp.NewTool("references",
-			mcp.WithDescription(`Find all usages of a symbol. Get location from symbols tool first.
-
-SINGLE REQUEST:
-{"path": "/src/user.ts", "line": 42, "column": 8}
-
-BATCH REQUESTS (find references for multiple symbols):
-[
-  {"path": "/src/user.ts", "line": 42, "column": 8},
-  {"path": "/src/api.ts", "line": 15, "column": 12}
-]
-
-RETURNS:
-- Single: {"success": true, "data": [{"location": "/src/api/handler.ts:25:10", "preview": "  const result = processUser(data);"}]}
-- Batch: [{"success": true, "data": [...]}, {"success": true, "data": [...]}]`),
-			mcp.WithObject("args",
-				mcp.Description("Single location object or array of locations for batch operations"),
-			),
-		),
-		handleTool,
-	)
-
-	// Register allTypesInFile tool
-	mcpServer.AddTool(
-		mcp.NewTool("allTypesInFile",
-			mcp.WithDescription(`Get all types and top-level functions in a file. Best for file overview.
-
-SINGLE REQUEST:
-{"path": "/src/models/user.ts"}
-{"path": "/src/models/user.ts", "includeMembers": false}  // Only type definitions, no fields/methods
-
-BATCH REQUESTS (analyze multiple files):
-[
-  {"path": "/src/models/user.ts"},
-  {"path": "/src/models/product.ts", "includeMembers": false}
-]
-
-PARAMETERS:
-- path: absolute file path to analyze
-- includeMembers?: boolean (default: true) - Include fields/methods. When false, only shows type definitions and nested types
-
-RETURNS:
-- Single: {"success": true, "data": [{"name": "User", "kind": "Class", "location": "...", "preview": "class User extends BaseModel {", "children": [...]}]}
-- Batch: [{"success": true, "data": [...]}, {"success": true, "data": [...]}]
-
-EACH TYPE/FUNCTION INCLUDES:
-- name: symbol name
-- kind: symbol type (Class, Interface, Function, etc.)
-- location: file path with line/column range
-- preview: line of code where symbol is defined
-- children?: members for types (methods, properties, nested types based on includeMembers flag)`),
-			mcp.WithObject("args",
-				mcp.Description("Single file path object or array of file paths for batch operations"),
-			),
-		),
-		handleTool,
-	)
-
-	// Register diagnostics tool
-	mcpServer.AddTool(
-		mcp.NewTool("diagnostics",
-			mcp.WithDescription(`Get errors and warnings from language servers.
-
-SINGLE REQUEST:
-{} // All workspace diagnostics
-{"path": "/src/app.ts"} // Specific file
-
-BATCH REQUESTS (check multiple files):
-[
-  {"path": "/src/app.ts"},
-  {"path": "/src/user.ts"},
-  {} // Include workspace-wide diagnostics
-]
-
-RETURNS:
-- Single: {"success": true, "data": [{"path": "/src/app.ts:10:5", "severity": "error", "message": "..."}]}
-- Batch: [{"success": true, "data": [...]}, {"success": true, "data": [...]}]`),
-			mcp.WithObject("args",
-				mcp.Description("Single request object or array of requests for batch operations"),
-			),
-		),
-		handleTool,
-	)
-
-	// Register definition tool
-	mcpServer.AddTool(
-		mcp.NewTool("definition",
-			mcp.WithDescription(`Jump to definition of a symbol. Get location from symbols tool first.
-
-SINGLE REQUEST:
-{"path": "/src/app.ts", "line": 25, "column": 12}
-
-BATCH REQUESTS (find definitions for multiple symbols):
-[
-  {"path": "/src/app.ts", "line": 25, "column": 12},
-  {"path": "/src/app.ts", "line": 30, "column": 8}
-]
-
-RETURNS:
-- Single: {"success": true, "data": [{"location": "/src/models/user.ts:42:8", "preview": "...", "kind": "Function"}]}
-- Batch: [{"success": true, "data": [...]}, {"success": true, "data": [...]}]`),
-			mcp.WithObject("args",
-				mcp.Description("Single location object or array of locations for batch operations"),
-			),
-		),
-		handleTool,
-	)
-
-	// Register supertype tool
-	mcpServer.AddTool(
-		mcp.NewTool("supertype",
-			mcp.WithDescription(`Find what a type extends or implements. Get location from symbols tool first.
-
-SINGLE REQUEST:
-{"path": "/src/models/User.ts", "line": 5, "column": 14}
-
-BATCH REQUESTS (find supertypes for multiple types):
-[
-  {"path": "/src/models/User.ts", "line": 5, "column": 14},
-  {"path": "/src/models/Product.ts", "line": 8, "column": 7}
-]
-
-RETURNS:
-- Single: {"success": true, "data": [{"name": "BaseEntity", "kind": "Class", "location": "...", "preview": "..."}]}
-- Batch: [{"success": true, "data": [...]}, {"success": false, "error": "Type hierarchy not supported..."}]
-
-Note: May not be supported by all language servers`),
-			mcp.WithObject("args",
-				mcp.Description("Single location object or array of locations for batch operations"),
-			),
-		),
-		handleTool,
-	)
-
-	// Register subtype tool
-	mcpServer.AddTool(
-		mcp.NewTool("subtype",
-			mcp.WithDescription(`Find implementations or subclasses of a type. Get location from symbols tool first.
-
-SINGLE REQUEST:
-{"path": "/src/base/Repository.ts", "line": 1, "column": 7}
-
-BATCH REQUESTS (find subtypes for multiple types):
-[
-  {"path": "/src/base/Repository.ts", "line": 1, "column": 7},
-  {"path": "/src/base/Service.ts", "line": 3, "column": 10}
-]
-
-RETURNS:
-- Single: {"success": true, "data": [{"name": "UserRepository", "kind": "Class", "location": "...", "preview": "..."}]}
-- Batch: [{"success": true, "data": [...]}, {"success": false, "error": "Type hierarchy not supported..."}]
-
-Note: May not be supported by all language servers`),
-			mcp.WithObject("args",
-				mcp.Description("Single location object or array of locations for batch operations"),
-			),
-		),
-		handleTool,
-	)
-
 	// Start serving
 	log.Println("Starting MCP server...")
 	if err := server.ServeStdio(mcpServer); err != nil {

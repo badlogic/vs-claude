@@ -4,6 +4,7 @@ const { build } = require('esbuild');
 const path = require('path');
 
 const isWatchMode = process.argv.includes('--watch');
+const isDebugMode = process.argv.includes('--debug') || process.env.NODE_ENV === 'development';
 
 async function buildExtension() {
   const options = {
@@ -15,7 +16,7 @@ async function buildExtension() {
     platform: 'node',
     target: 'node16',
     sourcemap: true,
-    minify: !isWatchMode,
+    minify: !isWatchMode && !isDebugMode,
     logLevel: 'info',
   };
 

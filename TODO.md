@@ -27,7 +27,7 @@
     - Environment variable handling
 
 ## Random stuff
-  - [ ] e2e tests for all tools through MCP server
+  - [x] e2e tests for all tools through MCP server
   - [ ] Typed tool definition parameters, not "WithObject("args") in main.go
   - [x] Return preview for symbols (name may or may not include symbol signature, preview more likely to include full signature)
   - [ ] Add depth operator for symbols tool (e.g., "Class.**" to get all descendants regardless of depth, similar to allTypesInFile behavior)

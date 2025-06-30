@@ -1,31 +1,9 @@
 import { logger } from './logger';
-import { AllTypesInFileTool } from './tools/all-types-in-file-tool';
-import { DefinitionTool } from './tools/definition-tool';
-import { DiagnosticsTool } from './tools/diagnostics-tool';
 import { OpenHandler } from './tools/open-tool';
-import { ReferencesTool } from './tools/references-tool';
-import { SubAndSupertypeTool } from './tools/sub-and-super-type-tool';
-import { SymbolsTool } from './tools/symbols-tool';
-import type {
-	AllTypesInFileRequest,
-	DefinitionRequest,
-	DiagnosticsRequest,
-	OpenRequest,
-	ReferenceRequest,
-	SymbolsRequest,
-	TypeHierarchyRequest,
-} from './tools/types';
+import type { OpenRequest } from './tools/types';
 
 // Discriminated union for typed commands
-export type TypedCommand =
-	| { id: string; tool: 'open'; args: OpenRequest[] }
-	| { id: string; tool: 'symbols'; args: SymbolsRequest[] }
-	| { id: string; tool: 'diagnostics'; args: DiagnosticsRequest[] }
-	| { id: string; tool: 'references'; args: ReferenceRequest[] }
-	| { id: string; tool: 'definition'; args: DefinitionRequest[] }
-	| { id: string; tool: 'supertype'; args: TypeHierarchyRequest[] }
-	| { id: string; tool: 'subtype'; args: TypeHierarchyRequest[] }
-	| { id: string; tool: 'allTypesInFile'; args: AllTypesInFileRequest[] };
+export type TypedCommand = { id: string; tool: 'open'; args: OpenRequest[] };
 
 // Raw command from MCP (before type validation)
 export interface Command {
@@ -43,37 +21,16 @@ export interface CommandResponse {
 
 export class CommandHandler {
 	private openHandler: OpenHandler;
-	private symbolsTool: SymbolsTool;
-	private diagnosticsTool: DiagnosticsTool;
-	private referencesTool: ReferencesTool;
-	private definitionTool: DefinitionTool;
-	private subAndSupertypeTool: SubAndSupertypeTool;
-	private allTypesInFileTool: AllTypesInFileTool;
 
 	constructor() {
 		this.openHandler = new OpenHandler();
-		this.symbolsTool = new SymbolsTool();
-		this.diagnosticsTool = new DiagnosticsTool();
-		this.referencesTool = new ReferencesTool();
-		this.definitionTool = new DefinitionTool();
-		this.subAndSupertypeTool = new SubAndSupertypeTool();
-		this.allTypesInFileTool = new AllTypesInFileTool();
 	}
 
 	/**
 	 * Type guard to check if a command is properly typed
 	 */
 	private isTypedCommand(command: Command): command is TypedCommand {
-		return (
-			command.tool === 'open' ||
-			command.tool === 'symbols' ||
-			command.tool === 'diagnostics' ||
-			command.tool === 'references' ||
-			command.tool === 'definition' ||
-			command.tool === 'supertype' ||
-			command.tool === 'subtype' ||
-			command.tool === 'allTypesInFile'
-		);
+		return command.tool === 'open';
 	}
 
 	/**
@@ -112,64 +69,6 @@ export class CommandHandler {
 				case 'open': {
 					// OpenHandler already accepts an array
 					result = await this.openHandler.execute(typedCommand.args);
-					break;
-				}
-
-				case 'symbols': {
-					logger.info('CommandHandler', `Symbols args: ${JSON.stringify(typedCommand.args)}`);
-					const results = await Promise.all(typedCommand.args.map((arg) => this.symbolsTool.execute(arg)));
-					// If single request, return single result
-					result = typedCommand.args.length === 1 ? results[0] : { success: true, data: results };
-					break;
-				}
-
-				case 'diagnostics': {
-					const results = await Promise.all(
-						typedCommand.args.map((arg) => this.diagnosticsTool.execute(arg))
-					);
-					result = typedCommand.args.length === 1 ? results[0] : { success: true, data: results };
-					break;
-				}
-
-				case 'references': {
-					const results = await Promise.all(typedCommand.args.map((arg) => this.referencesTool.execute(arg)));
-					result = typedCommand.args.length === 1 ? results[0] : { success: true, data: results };
-					break;
-				}
-
-				case 'definition': {
-					const results = await Promise.all(typedCommand.args.map((arg) => this.definitionTool.execute(arg)));
-					result = typedCommand.args.length === 1 ? results[0] : { success: true, data: results };
-					break;
-				}
-
-				case 'supertype': {
-					typedCommand.args.forEach((arg) => {
-						arg.type = 'supertype';
-					});
-					const results = await Promise.all(
-						typedCommand.args.map((arg) => this.subAndSupertypeTool.execute(arg))
-					);
-					result = typedCommand.args.length === 1 ? results[0] : { success: true, data: results };
-					break;
-				}
-
-				case 'subtype': {
-					typedCommand.args.forEach((arg) => {
-						arg.type = 'subtype';
-					});
-					const results = await Promise.all(
-						typedCommand.args.map((arg) => this.subAndSupertypeTool.execute(arg))
-					);
-					result = typedCommand.args.length === 1 ? results[0] : { success: true, data: results };
-					break;
-				}
-
-				case 'allTypesInFile': {
-					const results = await Promise.all(
-						typedCommand.args.map((arg) => this.allTypesInFileTool.execute(arg))
-					);
-					result = typedCommand.args.length === 1 ? results[0] : { success: true, data: results };
 					break;
 				}
 			}

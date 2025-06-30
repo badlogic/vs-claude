@@ -10,5 +10,5 @@
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "exclude": ["node_modules", ".vscode-test", "vscode", "mcp-golang", "mcp-go", "mcp", "test", "build", "src/views"]
+  "exclude": ["node_modules", ".vscode-test", "vscode", "mcp-golang", "mcp-go", "mcp", "test", "build", "src/views", "temp-*"]
 }
