@@ -1,17 +1,10 @@
-import * as fs from 'fs';
+import { runTests } from '@vscode/test-electron';
 import * as path from 'path';
-import { downloadAndUnzipVSCode, runTests } from '@vscode/test-electron';
-import { spawnSync, execSync } from 'child_process';
 
 // This function is no longer needed since we use the shared profile setup
 
 async function main() {
 	try {
-		// Run the extension setup script first
-		console.log('Setting up test extensions...');
-		const setupScript = path.join(__dirname, '../../scripts/setup-test-extensions.js');
-		execSync(`node "${setupScript}"`, { stdio: 'inherit' });
-
 		// The folder containing the Extension Manifest package.json
 		// Passed to `--extensionDevelopmentPath`
 		const extensionDevelopmentPath = path.resolve(__dirname, '../../../');
@@ -25,26 +18,14 @@ async function main() {
 		// Passed to --extensionTestsPath
 		const extensionTestsPath = path.resolve(__dirname, './suite/index');
 		console.log('Extension tests path:', extensionTestsPath);
-		console.log('Test index exists:', require('fs').existsSync(extensionTestsPath + '.js'));
+		console.log('Test index exists:', require('fs').existsSync(`${extensionTestsPath}.js`));
 
 		// The test workspace path - use absolute path to compiled location
 		const testWorkspacePath = path.resolve(__dirname, './test-workspace');
 		console.log('Test workspace path:', testWorkspacePath);
 		console.log('Test workspace exists:', require('fs').existsSync(testWorkspacePath));
 
-		// Use the same profile and extensions as development
-		// The .vscode-test directory is at the project root, not in build
-		const projectRoot = path.resolve(__dirname, '../../../');
-		const testDir = path.join(projectRoot, '.vscode-test');
-		const profileDir = path.join(testDir, 'profile');
-		const extensionsDir = path.join(testDir, 'extensions');
-
-		console.log('Extensions directory:', extensionsDir);
-		console.log('Extensions exist:', require('fs').existsSync(extensionsDir));
-		if (require('fs').existsSync(extensionsDir)) {
-			const extensions = require('fs').readdirSync(extensionsDir);
-			console.log('Installed extensions:', extensions.filter((f: string) => !f.startsWith('.')).length);
-		}
+		// Clean VS Code test environment - no extensions needed
 
 		// Launch configuration - use test workspace
 		const launchArgs = [
@@ -54,11 +35,31 @@ async function main() {
 			'--skip-release-notes', // Skip release notes
 			'--disable-updates', // Disable update checks during tests
 			'--disable-extension-update', // Disable extension updates
-			`--user-data-dir=${profileDir}`, // Use the same profile as development
-			`--extensions-dir=${extensionsDir}`, // Use the same extensions as development
 		];
 
 		console.log('Launch args:', JSON.stringify(launchArgs, null, 2));
+
+		// Parse CLI arguments
+		const args = process.argv.slice(2);
+		let testFile: string | undefined;
+		let testPattern: string | undefined;
+
+		for (let i = 0; i < args.length; i++) {
+			if (args[i] === '--file' && i + 1 < args.length) {
+				testFile = args[i + 1];
+				i++;
+			} else if (args[i] === '--test-pattern' && i + 1 < args.length) {
+				testPattern = args[i + 1];
+				i++;
+			}
+		}
+
+		if (testFile) {
+			console.log('Test file filter:', testFile);
+		}
+		if (testPattern) {
+			console.log('Test pattern filter:', testPattern);
+		}
 
 		// Download VS Code, unzip it and run the integration test
 		await runTests({
@@ -66,8 +67,10 @@ async function main() {
 			extensionTestsPath,
 			launchArgs,
 			extensionTestsEnv: {
-				VSCODE_TEST: '1'
-			}
+				VSCODE_TEST: '1',
+				TEST_FILE: testFile || '',
+				TEST_PATTERN: testPattern || '',
+			},
 		});
 	} catch (err) {
 		console.error('Failed to run tests:', err);

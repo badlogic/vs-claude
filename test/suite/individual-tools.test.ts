@@ -17,9 +17,9 @@ suite('Individual Tools Unit Tests', function () {
 	suiteSetup(async () => {
 		// For development extensions in test mode, VS Code doesn't list them normally
 		// The extension should have already been activated by VS Code
-		
+
 		// Wait a bit for extension to fully initialize
-		await new Promise(resolve => setTimeout(resolve, 2000));
+		await new Promise((resolve) => setTimeout(resolve, 2000));
 
 		// Create tool instances
 		openHandler = new OpenHandler();
@@ -34,39 +34,43 @@ suite('Individual Tools Unit Tests', function () {
 
 	suite('Open Tool', () => {
 		test('Should open a single file', async () => {
-			const request: OpenRequest[] = [{
-				type: 'file',
-				path: getTestFilePath('typescript/user.service.ts'),
-			}];
+			const request: OpenRequest[] = [
+				{
+					type: 'file',
+					path: getTestFilePath('typescript/user.service.ts'),
+				},
+			];
 
 			const result = await openHandler.execute(request);
 			assert.ok(result.success, 'Should succeed');
-			
+
 			// Give VS Code time to open the file
 			await new Promise((resolve) => setTimeout(resolve, 100));
-			
+
 			// Check if file is open
 			const openEditors = vscode.window.visibleTextEditors;
-			const isOpen = openEditors.some((editor) => 
-				editor.document.uri.fsPath === getTestFilePath('typescript/user.service.ts')
+			const isOpen = openEditors.some(
+				(editor) => editor.document.uri.fsPath === getTestFilePath('typescript/user.service.ts')
 			);
 			assert.ok(isOpen, 'File should be open in editor');
 		});
 
 		test('Should open a file with line range', async () => {
 			const filePath = getTestFilePath('typescript/user.service.ts');
-			const request: OpenRequest[] = [{
-				type: 'file',
-				path: filePath,
-				startLine: 10,
-				endLine: 20,
-			}];
+			const request: OpenRequest[] = [
+				{
+					type: 'file',
+					path: filePath,
+					startLine: 10,
+					endLine: 20,
+				},
+			];
 
 			const result = await openHandler.execute(request);
 			assert.ok(result.success, 'Should succeed');
-			
+
 			await new Promise((resolve) => setTimeout(resolve, 100));
-			
+
 			const activeEditor = vscode.window.activeTextEditor;
 			if (activeEditor && activeEditor.document.uri.fsPath === filePath) {
 				const selection = activeEditor.selection;
@@ -89,25 +93,27 @@ suite('Individual Tools Unit Tests', function () {
 
 			const result = await openHandler.execute(requests);
 			assert.ok(result.success, 'Should succeed');
-			
+
 			// Give VS Code more time to open multiple files
 			await new Promise((resolve) => setTimeout(resolve, 1000));
-			
+
 			// Check open tabs
 			const tabGroups = vscode.window.tabGroups;
 			let totalTabs = 0;
 			tabGroups.all.forEach((group) => {
 				totalTabs += group.tabs.length;
 			});
-			
+
 			assert.ok(totalTabs >= 2, 'Should have at least 2 tabs open');
 		});
 
 		test('Should handle errors gracefully', async () => {
-			const request: OpenRequest[] = [{
-				type: 'file',
-				path: '/non/existent/file.ts',
-			}];
+			const request: OpenRequest[] = [
+				{
+					type: 'file',
+					path: '/non/existent/file.ts',
+				},
+			];
 
 			const result = await openHandler.execute(request);
 			assert.ok(!result.success, 'Should fail for non-existent file');

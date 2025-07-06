@@ -60,7 +60,7 @@
     "build": "node scripts/build-extension.js && ./scripts/build-binaries.sh",
     "build:debug": "NODE_ENV=development node scripts/build-extension.js --debug && cd mcp && go build -o ../build/mcp/mcp-server-$(go env GOOS)-$(go env GOARCH)$(go env GOEXE) . && cd ..",
     "watch": "node scripts/build-extension.js --watch",
-    "check": "biome check --write ./src && cd mcp && go fmt ./... && cd .. && tsc --noEmit",
+    "check": "biome check --write ./src ./test && cd mcp && go fmt ./... && cd .. && tsc --noEmit && tsc -p ./tsconfig.test.json --noEmit",
     "test": "rm -rf build && npm run build && tsc -p ./tsconfig.test.json && cp -r test/test-workspace build/extension/test/ && cp -r scripts build/ && cp logo.png build/extension/ 2>/dev/null || true && node test/setup-test-workspace.js && node ./build/extension/test/runTest.js",
     "clean": "rm -rf build/",
     "prepare": "husky"

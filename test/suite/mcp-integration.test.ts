@@ -41,7 +41,7 @@ suite('MCP Integration Tests', function () {
 			assert.ok(result.success || result.data === '', 'Open command should succeed');
 
 			// Give VS Code time to open the file
-			await new Promise((resolve) => setTimeout(resolve, 100));
+			await new Promise((resolve) => setTimeout(resolve, 500));
 
 			// Check if file is open
 			const openEditors = vscode.window.visibleTextEditors;
@@ -132,7 +132,7 @@ suite('MCP Integration Tests', function () {
 			});
 
 			assert.ok(result.success || result.data === '', 'Open diff should succeed');
-			
+
 			// Give VS Code time to open the diff
 			await new Promise((resolve) => setTimeout(resolve, 500));
 		});

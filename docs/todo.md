@@ -1,0 +1,19 @@
+- [ ] I want a palette command called "VS Claude: Launch Claude Code" that:
+    - Spawns claude (or a configurable alias/executable)
+    - Wraps it such that we can push user input to it via the processes stdin
+    - Figures out the session we are in, so we can:
+        - Watch for changes the session's jsonl file on disk in ~/.claude/projects/[encoded working dir]/[session-id].jsonl
+    - Spawns a pane with a chat interface in VS Code that:
+        - receives the full condensed session history from the jsonl file
+        - receives any further updates to the session history and displays them
+        - displays all the session history (user & assistant messages), with special rendering of tool calls and their results, that make it easy for the user to read and inspect everything in detail if they want to
+            - Bash tool -> bash command issued, result, both expandable
+            - Read tool -> read command issued (file, offset, limit), result, both expandable
+            - Write tool -> command issued, unified diff, result
+            - ...
+            - Any MCP just raw inputs and outputs
+        - has a text area where the user can compose messages to claude.
+            - clicking on send or hitting ENTER will write the message to stdin of the wrapped process
+            - pressing escape will send an escape sequence to stdin and clear the text field
+            - pressing ctrl + c will send that sequence to stdin
+- [ ] scripts/build-binaries.sh -> build-mcp-server.sh

@@ -27,28 +27,34 @@ export class MCPClient {
 	}
 
 	private findTestWindowId(): string | undefined {
-		// Find the newest metadata file in .vs-claude directory
+		// Find the metadata file for the test window
 		const vsClaudeDir = path.join(os.homedir(), '.vs-claude');
 		const files = fs.readdirSync(vsClaudeDir);
 		const metaFiles = files.filter((f) => f.endsWith('.meta.json'));
 
-		let newestFile = '';
-		let newestTime = 0;
+		// Get the test workspace path to match against
+		const testWorkspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+		if (!testWorkspacePath) {
+			console.error('No test workspace found');
+			return undefined;
+		}
 
+		// Find the window ID that matches our test workspace
 		for (const file of metaFiles) {
 			const fullPath = path.join(vsClaudeDir, file);
-			const stat = fs.statSync(fullPath);
-			if (stat.mtimeMs > newestTime) {
-				newestTime = stat.mtimeMs;
-				newestFile = file;
+			try {
+				const metadata = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+				if (metadata.workspace?.includes('test-workspace')) {
+					const windowId = file.replace('.meta.json', '');
+					console.log(`Found test window ID: ${windowId} for workspace: ${metadata.workspace}`);
+					return windowId;
+				}
+			} catch (_err) {
+				// Ignore files that can't be read
 			}
 		}
 
-		if (newestFile) {
-			const windowId = newestFile.replace('.meta.json', '');
-			return windowId;
-		}
-
+		console.error(`No window found for test workspace: ${testWorkspacePath}`);
 		return undefined;
 	}
 
@@ -168,9 +174,9 @@ export class E2ETestSetup {
 
 		// For development extensions in test mode, VS Code doesn't list them normally
 		// The extension should have already been activated by VS Code
-		
+
 		// Wait a bit for extension to fully initialize
-		await new Promise(resolve => setTimeout(resolve, 2000));
+		await new Promise((resolve) => setTimeout(resolve, 2000));
 
 		// Start the MCP server
 		const platform = os.platform();

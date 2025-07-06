@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 suite('Extension Test Suite', () => {
-	let extension: vscode.Extension<any> | undefined;
+	let _extension: vscode.Extension<any> | undefined;
 
 	suiteSetup(async function () {
 		// Increase timeout for suite setup
@@ -14,9 +14,9 @@ suite('Extension Test Suite', () => {
 		// For development extensions in test mode, VS Code doesn't list them normally
 		// Instead, we need to verify the extension is active by checking its effects
 		// The extension should have already been activated by VS Code
-		
+
 		// Wait a bit for extension to fully initialize
-		await new Promise(resolve => setTimeout(resolve, 2000));
+		await new Promise((resolve) => setTimeout(resolve, 2000));
 	});
 
 	test('Extension is loaded by checking commands', async () => {
@@ -26,7 +26,6 @@ suite('Extension Test Suite', () => {
 		assert.ok(commands.includes('vs-claude.showSetup'), 'vs-claude.showSetup command should be registered');
 		assert.ok(commands.includes('vs-claude.uninstall'), 'vs-claude.uninstall command should be registered');
 	});
-
 
 	test('VS Claude directory should be created', async function () {
 		this.timeout(10000);
