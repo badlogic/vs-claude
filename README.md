@@ -127,7 +127,7 @@ vs-claude/
 │   └── main.go         # MCP server implementation
 ├── scripts/             # Build scripts
 │   ├── build-extension.js        # Extension bundling
-│   └── build-binaries.sh         # Cross-platform Go compilation
+│   └── build-mcp-server.sh       # Cross-platform Go compilation
 ├── test/                # Test suite
 │   ├── suite/           # Test implementations
 │   └── test-workspace/  # Sample project for testing

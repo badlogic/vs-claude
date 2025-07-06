@@ -57,7 +57,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
-    "build": "node scripts/build-extension.js && ./scripts/build-binaries.sh",
+    "build": "node scripts/build-extension.js && ./scripts/build-mcp-server.sh",
     "build:debug": "NODE_ENV=development node scripts/build-extension.js --debug && cd mcp && go build -o ../build/mcp/mcp-server-$(go env GOOS)-$(go env GOARCH)$(go env GOEXE) . && cd ..",
     "watch": "node scripts/build-extension.js --watch",
     "check": "biome check --write ./src ./test && cd mcp && go fmt ./... && cd .. && tsc --noEmit && tsc -p ./tsconfig.test.json --noEmit",

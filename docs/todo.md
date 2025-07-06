@@ -16,4 +16,4 @@
             - clicking on send or hitting ENTER will write the message to stdin of the wrapped process
             - pressing escape will send an escape sequence to stdin and clear the text field
             - pressing ctrl + c will send that sequence to stdin
-- [ ] scripts/build-binaries.sh -> build-mcp-server.sh
+- [ ] the VS code tasks.json has "label": "npm: test:build", which has the test build commands in it verbatim. add that to package.json instead, let "test" use that too
