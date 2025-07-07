@@ -4,7 +4,7 @@
   "description": "MCP server for Claude to control VS Code",
   "version": "0.0.1",
   "publisher": "mariozechner",
-  "icon": "logo.png",
+  "icon": "resources/logo.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/badlogic/vs-claude"
@@ -29,9 +29,9 @@
   "files": [
     "build/extension/**/*",
     "build/mcp/**/*",
+    "resources/**/*",
     "README.md",
-    "LICENSE",
-    "logo.png"
+    "LICENSE"
   ],
   "categories": [
     "Other"
@@ -52,13 +52,18 @@
       {
         "command": "vs-claude.uninstall",
         "title": "VS Claude: Uninstall MCP"
+      },
+      {
+        "command": "vs-claude.openSettings",
+        "title": "VS Claude: Open Settings"
       }
     ]
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
-    "build": "node scripts/build-extension.js && ./scripts/build-mcp-server.sh",
-    "build:debug": "node scripts/build-extension.js --debug && ./scripts/build-mcp-server.sh --debug",
+    "build": "node scripts/build-extension.js && node scripts/build-panels.js && ./scripts/build-mcp-server.sh",
+    "build:debug": "node scripts/build-extension.js --debug && node scripts/build-panels.js && ./scripts/build-mcp-server.sh --debug",
+    "build:panels": "node scripts/build-panels.js",
     "build:test": "./scripts/build-tests.sh",
     "build:vsix": "npm run clean && npm run build && vsce package",
     "check": "./scripts/check.sh",

@@ -16,3 +16,4 @@
             - clicking on send or hitting ENTER will write the message to stdin of the wrapped process
             - pressing escape will send an escape sequence to stdin and clear the text field
             - pressing ctrl + c will send that sequence to stdin
+- [ ] the diff test doesn't work, i think because the file we diff doesn't have changes or so. itpasses, but i can see that in the diff panel vs code displays an error. it disappears to quickly for me to see what the error is.

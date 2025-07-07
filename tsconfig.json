@@ -3,12 +3,14 @@
     "module": "commonjs",
     "target": "es2020",
     "outDir": "build/extension",
-    "lib": ["es2020"],
+    "lib": ["es2020", "dom"],
     "sourceMap": true,
     "rootDir": "src",
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false
   },
   "exclude": ["node_modules", ".vscode-test", "vscode", "mcp-golang", "mcp-go", "mcp", "test", "build", "src/views", "temp-*"]
 }

@@ -10,6 +10,7 @@ rm -rf build
 # Build extension and MCP server in debug mode
 echo "Building extension and MCP server in debug mode..."
 node scripts/build-extension.js --debug
+node scripts/build-panels.js
 ./scripts/build-mcp-server.sh --debug
 
 # Compile TypeScript test files
@@ -24,8 +25,10 @@ cp -r test/test-workspace build/extension/test/
 echo "Copying scripts..."
 cp -r scripts build/
 
-# Copy logo.png if it exists
-cp logo.png build/extension/ 2>/dev/null || true
+# Copy resources if they exist
+if [ -d "resources" ]; then
+    cp -r resources build/extension/
+fi
 
 # Setup test workspace
 echo "Setting up test workspace..."
