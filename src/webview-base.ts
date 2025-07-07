@@ -9,12 +9,22 @@ interface VsCodeApi {
 
 declare function acquireVsCodeApi(): VsCodeApi;
 
+declare global {
+	interface Window {
+		vsClaudeResources?: Record<string, string>;
+	}
+}
+
 export abstract class WebviewBase<T> extends LitElement {
 	private vscodeApi = acquireVsCodeApi();
 
 	// Override to use light DOM (no shadow DOM) for Tailwind
 	createRenderRoot() {
 		return this;
+	}
+
+	protected resource(fileName: string): string {
+		return window.vsClaudeResources?.[fileName] ?? '';
 	}
 
 	connectedCallback() {

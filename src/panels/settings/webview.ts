@@ -3,14 +3,6 @@ import { customElement, state } from 'lit/decorators.js';
 import { WebviewBase } from '../../webview-base';
 import type { SettingsMessage } from './messages';
 
-declare global {
-	interface Window {
-		vsClaudeResources?: {
-			logoUri?: string;
-		};
-	}
-}
-
 @customElement('settings-webview')
 export class SettingsWebview extends WebviewBase<SettingsMessage> {
 	@state()
@@ -33,7 +25,7 @@ export class SettingsWebview extends WebviewBase<SettingsMessage> {
 	render() {
 		return html`
       <div class="flex flex-col items-center p-8">
-        <img src="${window.vsClaudeResources?.logoUri}" class="w-32 h-32 mb-4">
+        <img src="${this.resource('logo.png')}" class="w-32 h-32 mb-4">
         <h1 class="text-2xl font-bold">${this.message}</h1>
         <button 
           @click=${() => this.sendMessage({ type: 'saveSettings', settings: { theme: this.theme } })}

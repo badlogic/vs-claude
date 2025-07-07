@@ -17,3 +17,6 @@
             - pressing escape will send an escape sequence to stdin and clear the text field
             - pressing ctrl + c will send that sequence to stdin
 - [ ] the diff test doesn't work, i think because the file we diff doesn't have changes or so. itpasses, but i can see that in the diff panel vs code displays an error. it disappears to quickly for me to see what the error is.
+- [ ] opening VS Claude: Settings, will run the install check and display the popup first. settings panel only opens if we close popup. Need better flow.
+- [ ] Some panels like settings should only have a single instance ever i think, others might have multiple
+- [ ] Open VS Code, open settings, open again and move that setting's tab to the right, so we have two settings side by side. Close VS Code, re-open, two settings tabs are now on the left, while the right is empty. need to remember what column the tab was in

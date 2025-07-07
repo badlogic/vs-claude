@@ -43,9 +43,8 @@ export abstract class Panel<T> {
 					const key = prefix ? `${prefix}/${name}` : name;
 
 					if (type === vscode.FileType.File) {
-						// Convert file name to camelCase key (e.g., logo.png -> logoUri)
-						const keyName = key.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9]/g, '_') + 'Uri';
-						resources[keyName] = webview.asWebviewUri(fullPath).toString();
+						// Use original file name as key (e.g., logo.png -> logo.png)
+						resources[key] = webview.asWebviewUri(fullPath).toString();
 					} else if (type === vscode.FileType.Directory) {
 						await enumerateResources(fullPath, key);
 					}

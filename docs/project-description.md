@@ -66,6 +66,8 @@ TypeScript extension with Go MCP server for file operations.
 ### Resources
 - `resources/logo.png` - Extension logo (automatically copied to build)
 - Resources are automatically enumerated and injected into panels
+- Webviews access resources via `this.resource('filename.ext')` method in WebviewBase
+- Resource names use original file names (e.g., "logo.png" not "logoUri")
 
 ### Configuration
 - `package.json` - Extension manifest, scripts, and dependencies
