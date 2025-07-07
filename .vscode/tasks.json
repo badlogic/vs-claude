@@ -32,10 +32,11 @@
       }
     },
     {
-      "label": "npm: test:build",
-      "type": "shell",
-      "command": "rm -rf build && npm run build && npx tsc -p ./tsconfig.test.json && cp -r test/test-workspace build/extension/test/ && cp -r scripts build/ && cp logo.png build/extension/ 2>/dev/null || true && node scripts/setup-test-extensions.js && node test/setup-test-workspace.js",
+      "type": "npm",
+      "script": "build:test",
       "problemMatcher": "$tsc",
+      "label": "npm: test:build",
+      "detail": "Build for tests",
       "presentation": {
         "reveal": "silent",
         "panel": "dedicated",
