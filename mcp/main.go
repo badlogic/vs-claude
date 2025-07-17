@@ -86,6 +86,7 @@ Notes:
 - Git diff works even if file doesn't exist in one revision (shows as added/deleted)`+windowIdNote),
 			mcp.WithObject("args",
 				mcp.Description("Single item object or array of items to open. All file paths must be absolute."),
+				mcp.AdditionalProperties(true), // Allow any additional properties
 			),
 		),
 		handleTool,

@@ -2,7 +2,7 @@
   "name": "vs-claude",
   "displayName": "VS Claude",
   "description": "MCP server for Claude to control VS Code",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "publisher": "mariozechner",
   "icon": "resources/logo.png",
   "repository": {

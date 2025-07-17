@@ -6,7 +6,94 @@ import { promisify } from 'util';
 import * as vscode from 'vscode';
 import { logger } from './logger';
 
-const execAsync = promisify(exec);
+const _execAsync = promisify(exec);
+
+// Helper function to directly modify ~/.claude.json
+async function addMCPServerToConfig(serverPath: string): Promise<void> {
+	const claudeConfigPath = path.join(os.homedir(), '.claude.json');
+
+	try {
+		// Read existing config
+		const configData = await fs.promises.readFile(claudeConfigPath, 'utf8');
+		const config = JSON.parse(configData);
+
+		// Get current working directory for project-specific config
+		const cwd = process.cwd();
+
+		// Initialize projects object if it doesn't exist
+		if (!config.projects) {
+			config.projects = {};
+		}
+
+		// Initialize project entry if it doesn't exist
+		if (!config.projects[cwd]) {
+			config.projects[cwd] = {
+				allowedTools: [],
+				history: [],
+				mcpContextUris: [],
+				mcpServers: {},
+				enabledMcpjsonServers: [],
+				disabledMcpjsonServers: [],
+				hasTrustDialogAccepted: false,
+				projectOnboardingSeenCount: 0,
+				hasClaudeMdExternalIncludesApproved: false,
+				hasClaudeMdExternalIncludesWarningShown: false,
+			};
+		}
+
+		// Add vs-claude MCP server
+		config.projects[cwd].mcpServers['vs-claude'] = {
+			type: 'stdio',
+			command: serverPath,
+			args: [],
+			env: {},
+		};
+
+		// Write back to file
+		await fs.promises.writeFile(claudeConfigPath, JSON.stringify(config, null, 2));
+		logger.info('SetupManager', `Added vs-claude MCP server to ${claudeConfigPath}`);
+	} catch (error) {
+		logger.error('SetupManager', `Failed to modify ~/.claude.json: ${error}`);
+		throw error;
+	}
+}
+
+// Helper function to remove MCP server from config
+async function removeMCPServerFromConfig(): Promise<void> {
+	const claudeConfigPath = path.join(os.homedir(), '.claude.json');
+
+	try {
+		const configData = await fs.promises.readFile(claudeConfigPath, 'utf8');
+		const config = JSON.parse(configData);
+		const cwd = process.cwd();
+
+		if (config.projects?.[cwd]?.mcpServers?.['vs-claude']) {
+			delete config.projects[cwd].mcpServers['vs-claude'];
+			await fs.promises.writeFile(claudeConfigPath, JSON.stringify(config, null, 2));
+			logger.info('SetupManager', `Removed vs-claude MCP server from ${claudeConfigPath}`);
+		}
+	} catch (error) {
+		logger.error('SetupManager', `Failed to modify ~/.claude.json: ${error}`);
+		throw error;
+	}
+}
+
+// Helper function to check if MCP server is installed
+async function checkMCPServerInConfig(): Promise<string | null> {
+	const claudeConfigPath = path.join(os.homedir(), '.claude.json');
+
+	try {
+		const configData = await fs.promises.readFile(claudeConfigPath, 'utf8');
+		const config = JSON.parse(configData);
+		const cwd = process.cwd();
+
+		const mcpServer = config.projects?.[cwd]?.mcpServers?.['vs-claude'];
+		return mcpServer?.command || null;
+	} catch (error) {
+		logger.error('SetupManager', `Failed to read ~/.claude.json: ${error}`);
+		return null;
+	}
+}
 
 export class SetupManager {
 	constructor(private context: vscode.ExtensionContext) {}
@@ -52,7 +139,7 @@ export class SetupManager {
 				if (result === 'Update') {
 					logger.info('SetupManager', 'Removing old VS Claude installation...');
 					try {
-						await execAsync('claude mcp remove -s user vs-claude');
+						await removeMCPServerFromConfig();
 						logger.info('SetupManager', 'Old installation removed');
 						await this.installMCP(mcpServerPath);
 					} catch (error) {
@@ -107,10 +194,7 @@ export class SetupManager {
 		try {
 			logger.info('SetupManager', 'Uninstalling VS Claude MCP server...');
 
-			const { stderr } = await execAsync('claude mcp remove -s user vs-claude');
-
-			// Command output logged only if there's an error
-			if (stderr) logger.warn('SetupManager', `Stderr: ${stderr}`);
+			await removeMCPServerFromConfig();
 
 			vscode.window.showInformationMessage('VS Claude has been uninstalled!', {
 				modal: false,
@@ -123,25 +207,7 @@ export class SetupManager {
 	}
 
 	private async checkInstallation(): Promise<string | null> {
-		try {
-			const { stdout } = await execAsync('claude mcp list');
-
-			// Check if vs-claude is actually in the list and extract its path
-			// The output format is: "name: path" on each line
-			const lines = stdout.split('\n');
-			for (const line of lines) {
-				const trimmedLine = line.trim();
-				if (trimmedLine.startsWith('vs-claude:')) {
-					// Extract the path after "vs-claude: "
-					const path = trimmedLine.substring('vs-claude:'.length).trim();
-					return path;
-				}
-			}
-			return null;
-		} catch {
-			// Claude CLI not available - expected in some environments
-			return null;
-		}
+		return await checkMCPServerInConfig();
 	}
 
 	private getMCPServerPath(): string | null {
@@ -171,10 +237,7 @@ export class SetupManager {
 		try {
 			logger.info('SetupManager', 'Installing VS Claude MCP server...');
 
-			const { stderr } = await execAsync(`claude mcp add -s user vs-claude "${mcpServerPath}"`);
-
-			// Command output logged only if there's an error
-			if (stderr) logger.warn('SetupManager', `Stderr: ${stderr}`);
+			await addMCPServerToConfig(mcpServerPath);
 
 			vscode.window.showInformationMessage('VS Claude has been installed!', {
 				modal: false,

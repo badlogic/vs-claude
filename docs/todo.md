@@ -20,3 +20,4 @@
 - [ ] opening VS Claude: Settings, will run the install check and display the popup first. settings panel only opens if we close popup. Need better flow.
 - [ ] Some panels like settings should only have a single instance ever i think, others might have multiple
 - [ ] Open VS Code, open settings, open again and move that setting's tab to the right, so we have two settings side by side. Close VS Code, re-open, two settings tabs are now on the left, while the right is empty. need to remember what column the tab was in
+- [ ] Agent tries to open folders for git diff. Tool description in mcp server must ensure agent understands it can only open one or more files/git diffs, not folders.
