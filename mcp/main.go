@@ -84,10 +84,8 @@ Notes:
 - All paths must be absolute
 - startLine/endLine are optional and 1-based
 - Git diff works even if file doesn't exist in one revision (shows as added/deleted)`+windowIdNote),
-			mcp.WithObject("args",
-				mcp.Description("Single item object or array of items to open. All file paths must be absolute."),
-				mcp.AdditionalProperties(true), // Allow any additional properties
-			),
+			mcp.WithObject("files", mcp.Description("File(s) to open - can be a single object or array of objects"), mcp.Required(), mcp.AdditionalProperties(true)),
+			mcp.WithString("windowId", mcp.Description("Optional window ID when multiple VS Code windows are open")),
 		),
 		handleTool,
 	)
@@ -111,17 +109,17 @@ func handleTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTool
 	// Get all arguments
 	args := request.GetArguments()
 
-	// Extract the actual args (MCP wraps them in an "args" object)
-	actualArgs, ok := args["args"]
-	if !ok {
-		return nil, fmt.Errorf("missing 'args' parameter")
-	}
-
 	// Check if there's a windowId at the top level
 	windowIdInterface, hasWindowId := args["windowId"]
 	var windowIdStr string
 	if hasWindowId {
 		windowIdStr, _ = windowIdInterface.(string)
+	}
+
+	// Get the files argument (no more nested args!)
+	actualArgs, ok := args["files"]
+	if !ok {
+		return nil, fmt.Errorf("missing 'files' parameter")
 	}
 
 	// Get the target window
@@ -130,7 +128,7 @@ func handleTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTool
 		return nil, err
 	}
 
-	// Marshal the actual args to pass through
+	// Marshal the actual args to pass through (extension expects 'args' field)
 	argsJson, err := json.Marshal(actualArgs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal arguments: %v", err)
